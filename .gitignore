@@ -7,6 +7,9 @@ wandb/*
 tmp/*
 weights/*
 
+# datasets is a symlink in msa folder to the original RealESRGAN folder for development purposes
+datasets
+
 version.py
 
 # Byte-compiled / optimized / DLL files
