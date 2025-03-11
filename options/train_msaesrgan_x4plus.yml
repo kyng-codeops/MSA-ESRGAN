@@ -101,7 +101,8 @@ network_d:
 path:
   # use the pre-trained Real-ESRNet model ip14+4kv3 is trained with more jpeg damage of [15, 95]
   # step 555K is just the current latest to test/debug with
-  pretrain_network_g: experiments/pretrained_models/ip14+4kv3_net_g_555000.pth
+  # pretrain_network_g: experiments/pretrained_models/ip14+4kv3_net_g_555000.pth
+  pretrain_network_g: experiments/pretrained_models/net_g_1965000.pth
   param_key_g: params_ema
   strict_load_g: true
   resume_state: ~
