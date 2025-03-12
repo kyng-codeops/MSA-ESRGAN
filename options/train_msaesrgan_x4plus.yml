@@ -18,7 +18,7 @@ gaussian_noise_prob: 0.5
 noise_range: [1, 30]
 poisson_scale_range: [0.05, 3]
 gray_noise_prob: 0.4
-jpeg_range: [15, 95]
+jpeg_range: [82, 95]
 
 # the second degradation process
 second_blur_prob: 0.8
@@ -28,7 +28,7 @@ gaussian_noise_prob2: 0.5
 noise_range2: [1, 25]
 poisson_scale_range2: [0.05, 2.5]
 gray_noise_prob2: 0.4
-jpeg_range2: [15, 95]
+jpeg_range2: [30, 82]
 
 gt_size: 256
 queue_size: 180
@@ -100,9 +100,7 @@ network_d:
 # path
 path:
   # use the pre-trained Real-ESRNet model ip14+4kv3 is trained with more jpeg damage of [15, 95]
-  # step 555K is just the current latest to test/debug with
-  # pretrain_network_g: experiments/pretrained_models/ip14+4kv3_net_g_555000.pth
-  pretrain_network_g: experiments/pretrained_models/net_g_1965000.pth
+  pretrain_network_g: experiments/pretrained_models/net_g_2950000.pth
   param_key_g: params_ema
   strict_load_g: true
   resume_state: ~
