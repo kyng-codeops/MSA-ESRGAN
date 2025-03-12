@@ -18,7 +18,7 @@ gaussian_noise_prob: 0.5
 noise_range: [1, 30]
 poisson_scale_range: [0.05, 3]
 gray_noise_prob: 0.4
-jpeg_range: [82, 95]
+jpeg_range: [75, 95]
 
 # the second degradation process
 second_blur_prob: 0.8
@@ -28,7 +28,7 @@ gaussian_noise_prob2: 0.5
 noise_range2: [1, 25]
 poisson_scale_range2: [0.05, 2.5]
 gray_noise_prob2: 0.4
-jpeg_range2: [30, 82]
+jpeg_range2: [15, 87]
 
 gt_size: 256
 queue_size: 180
