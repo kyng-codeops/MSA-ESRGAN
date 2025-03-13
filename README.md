@@ -16,10 +16,18 @@
 [![Publish-pip](https://github.com/xinntao/Real-ESRGAN/actions/workflows/publish-pip.yml/badge.svg)](https://github.com/xinntao/Real-ESRGAN/blob/master/.github/workflows/publish-pip.yml)
 
 </div>
-MSA-ESRGAN is a fork from Real-ESRGAN.  This is a pytorch and BasicSR implementation of the NIH paper published at the
-National Library of Medicine's National Center for Biotechnology Information.
-It is an adaptation of the Real-ESRGAN discriminator meant to improve the GAN's ability to focus attention in areas
-that might improve perceptual quality.  I became interested in this work while training Real-ESRGAN from the ground up
+MSA-ESRGAN is a forked modification from Real-ESRGAN.  This is a pytorch and BasicSR implementation of the NIH paper published at the
+National Library of Medicine's National Center for Biotechnology Information--with a modification on activation functions.
+
+MSA stands for Multi-Scale Attention and refers to the discriminator network architecture of the GAN.  This GAN uses the
+exact same generator as ESRGAN, Real-ESRGAN, and others (I believe BSRGAN also uses the same generator).  The new discriminator
+is meant to improve the GAN's ability to focus attention in areas that might or should improve perceptual quality but
+using a combination of Channel Attention and Spatial Attention. From the various versions of the same paper, the authors
+only called for the use or ReLU as the activation function.  However, the first couple rounds of training demonstrated
+the need to use Leaky ReLU.
+
+
+I became interested in this work while training Real-ESRGAN from the ground up
 on a custom built 4K natural image dataset that included the artistic use of focused foregrounds and blurred backgrounds.
 My goal was to see if a custom data set could teach Real-ESRGAN to maintain more details on images of human faces (i.e. getting
 rid of the airbrushed over smoothing on humans).  With a dataset of nearly 20,000 4K and higher images of mostly people, places,
@@ -28,11 +36,12 @@ to attempt sharpening blurred backgrounds and blurring some foregrounds.  This r
 modification to Real-ESRGAN (the generators between ESRGAN, Real-ESRGAN, and MSA-ESRGAN are all identical, only the discriminator is changed).  Since this is a work in-progress,
 I will eventually fix-up this repo's documentation.  For now, there will be tons of old references and links and typos.
 
-Traing this model is identical to Real-ESRGAN so I'm keeping much of that documentation for now.
+Inferencing this model is identical to Real-ESRGAN so I'm keeping much of that documentation for now.  The training procedures
+are also the same but the MSA discriminator is unique.
 
 
 
-If MSA-ESRGAN is helpful, please help to ⭐ this repo or recommend it to your friends 😊 <br>
+If MSA-ESRGAN is helpful, please help to ⭐ this repo<br>
 Other recommended projects:<br>
 ▶️ [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN): A practical algorithm for General Image/Video Restoration <br>
 ▶️ [GFPGAN](https://github.com/TencentARC/GFPGAN): A practical algorithm for real-world face restoration <br>
@@ -46,7 +55,7 @@ Other recommended projects:<br>
 > [[Paper](https://pubmed.ncbi.nlm.nih.gov/39580539/)] &emsp; [[Paper](https://www.nature.com/articles/s41598-024-78813-5)]
 
 <p align="center">
-  <img src="assets/teaser.jpg">
+  <img src="https://media.springernature.com/full/springer-static/image/art%3A10.1038%2Fs41598-024-78813-5/MediaObjects/41598_2024_78813_Fig4_HTML.png?as=webp">
 </p>
 
 ---
