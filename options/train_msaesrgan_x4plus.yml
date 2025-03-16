@@ -90,7 +90,6 @@ network_g:
   num_block: 23
   num_grow_ch: 32
 
-# FIXME: DOES THIS NEED TO MATCH THE discriminator object somehow in the arch files?
 network_d:
   type: UNetDiscriminator
   num_in_ch: 3
@@ -99,11 +98,27 @@ network_d:
 
 # path
 path:
-  # use the pre-trained Real-ESRNet model ip14+4kv3 is trained with more jpeg damage of [15, 95]
-  pretrain_network_g: experiments/pretrained_models/net_g_2950000.pth
+  # When using "auto_resume", for iteration zero the pretrain_network_g is used, otherwise
+  # this BasicSR framework will just use the hightest iteration cound net_g, net_d, and state files
+
+  # pretrain_network_g: experiments/pretrained_models/net_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
   param_key_g: params_ema
   strict_load_g: true
   resume_state: ~
+
+  #
+  # To restart from a specific point, the net_g and net_d files are needed in the model dir as well as the state file
+  # in the training_states dir.  The pretrain_network_g must be manually reset to the iteration count that matches
+  # the state file of choice.  Example restarting from iteration 320000 with the following parameters uncommented and
+  # without the "--auto_resume" flag on the commandline of train.py.
+  # If you use the --auto_resume flag, basicsr (at least in debug mode) seems to start from the beginning at
+  # iter 0 even with the following uncommented so to restart from a point that's not the last iter,
+  # use the yml file to set the new inital net_g (which also tells it which net_d) weights along with the state
+  # like below.
+  #
+  # pretrain_network_g: experiments/MSA-ESRGANx4plus_ip14+4kv3/models/net_g_320000.pth
+  # resume_state: experiments/MSA-ESRGANx4plus_ip14+4kv3/training_states/320000.state
+
 
 # training settings
 train:
@@ -121,10 +136,16 @@ train:
 
   scheduler:
     type: MultiStepLR
-    milestones: [400000]
+    # --NOTE-- even with the lr schedule, the adam optimizer seems to use this as a suggestion to its own adaptive lr?
+    # Restarting from 315000 adam didnot reduce lr to 5e-5 until after iteration 400000
+    # They say lr schedules are not needed with Adam, but it seems to seriously help my models fine-tune its learning
+    # PyTorch milestons are epochs, BasicSR docs say iterations, so the following are iterations cooresponding to
+    # 100 epochs (i.e. 100, 200, 300... 1500).  It makes little sense to do it by iterations (which is
+    # dataset size dependent) when epochs are what relate to statistical significance in training.
+    milestones: [160000, 320000, 480000, 640000, 800000, 960000, 1120000, 1280000, 1440000, 1600000, 1760000, 1920000, 2080000, 2240000, 2400000, 2560000, 2720000, 2880000, 3040000, 3200000, 3360000, 3520000, 3680000, 3840000, 4000000, 4160000, 4320000, 4480000, 4640000, 4800000]
     gamma: 0.5
 
-  total_iter: 535000
+  total_iter: 2400100
   warmup_iter: -1  # no warm up
 
   # losses
@@ -132,7 +153,7 @@ train:
     type: L1Loss
     loss_weight: 1.0
     reduction: mean
-  # perceptual loss (content and style losses)
+  # perceptual loss (content and stylecompressor losses)
   perceptual_opt:
     type: PerceptualLoss
     layer_weights:
