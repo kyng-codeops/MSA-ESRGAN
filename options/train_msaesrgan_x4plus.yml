@@ -1,5 +1,5 @@
 # general settings
-name: MSA-ESRGANx4plus_ip14+4kv3
+name: MSA-ESRGANx4plus_ip14+4kv3.2
 model_type: RealESRGANModel
 scale: 4
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
@@ -18,7 +18,7 @@ gaussian_noise_prob: 0.5
 noise_range: [1, 30]
 poisson_scale_range: [0.05, 3]
 gray_noise_prob: 0.4
-jpeg_range: [75, 95]
+jpeg_range: [15, 87]
 
 # the second degradation process
 second_blur_prob: 0.8
@@ -101,10 +101,10 @@ path:
   # When using "auto_resume", for iteration zero the pretrain_network_g is used, otherwise
   # this BasicSR framework will just use the hightest iteration cound net_g, net_d, and state files
 
-  # pretrain_network_g: experiments/pretrained_models/net_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
+  # pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v3_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
   param_key_g: params_ema
   strict_load_g: true
-  resume_state: ~
+  # resume_state: ~
 
   #
   # To restart from a specific point, the net_g and net_d files are needed in the model dir as well as the state file
@@ -116,8 +116,8 @@ path:
   # use the yml file to set the new inital net_g (which also tells it which net_d) weights along with the state
   # like below.
   #
-  # pretrain_network_g: experiments/MSA-ESRGANx4plus_ip14+4kv3/models/net_g_320000.pth
-  # resume_state: experiments/MSA-ESRGANx4plus_ip14+4kv3/training_states/320000.state
+  pretrain_network_g: experiments/MSA-ESRGANx4plus_ip14+4kv3.2/models/net_g_160000.pth
+  resume_state: experiments/MSA-ESRGANx4plus_ip14+4kv3.2/training_states/160000.state
 
 
 # training settings
@@ -142,10 +142,11 @@ train:
     # PyTorch milestons are epochs, BasicSR docs say iterations, so the following are iterations cooresponding to
     # 100 epochs (i.e. 100, 200, 300... 1500).  It makes little sense to do it by iterations (which is
     # dataset size dependent) when epochs are what relate to statistical significance in training.
-    milestones: [160000, 320000, 480000, 640000, 800000, 960000, 1120000, 1280000, 1440000, 1600000, 1760000, 1920000, 2080000, 2240000, 2400000, 2560000, 2720000, 2880000, 3040000, 3200000, 3360000, 3520000, 3680000, 3840000, 4000000, 4160000, 4320000, 4480000, 4640000, 4800000]
+    # milestones: [160000, 320000, 485000, 645000, 805000, 960000, 1120000, 1280000, 1440000, 1600000, 1760000, 1920000, 2080000, 2240000, 2400000, 2560000, 2720000, 2880000, 3040000, 3200000, 3360000, 3520000, 3680000, 3840000, 4000000, 4160000, 4320000, 4480000, 4640000, 4800000]
+    milestones: [485000, 960000, 1280000, 1600000, 2400000, 3200000, 4000000, 4800000]
     gamma: 0.5
 
-  total_iter: 2400100
+  total_iter: 4900000
   warmup_iter: -1  # no warm up
 
   # losses

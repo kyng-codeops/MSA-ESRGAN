@@ -1,13 +1,13 @@
 import torch
 
-from realesrgan.archs.discriminator_arch import UNetDiscriminatorSN
+from realesrgan.archs.discriminator_arch import UNetDiscriminator
 
 
 def test_unetdiscriminatorsn():
-    """Test arch: UNetDiscriminatorSN."""
+    """Test arch: UNetDiscriminator."""
 
     # model init and forward (cpu)
-    net = UNetDiscriminatorSN(num_in_ch=3, num_feat=4, skip_connection=True)
+    net = UNetDiscriminator(num_in_ch=3, num_feat=4, skip_connection=True)
     img = torch.rand((1, 3, 32, 32), dtype=torch.float32)
     output = net(img)
     assert output.shape == (1, 1, 32, 32)
