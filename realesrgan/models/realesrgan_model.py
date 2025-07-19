@@ -9,6 +9,7 @@ from basicsr.utils.img_process_util import filter2D
 from basicsr.utils.registry import MODEL_REGISTRY
 from collections import OrderedDict
 from torch.nn import functional as F
+from basicsr.losses import build_loss
 
 
 @MODEL_REGISTRY.register()
@@ -25,6 +26,13 @@ class RealESRGANModel(SRGANModel):
         self.jpeger = DiffJPEG(differentiable=False).cuda()  # simulate JPEG compression artifacts
         self.usm_sharpener = USMSharp().cuda()  # do usm sharpening
         self.queue_size = opt.get('queue_size', 180)
+
+        train_opt = opt['train']
+        # Add this block to initialize grad_opt
+        if train_opt.get('grad_opt'):
+            self.cri_grad = build_loss(train_opt['grad_opt']).to(self.device)
+        else:
+            self.cri_grad = None
 
     @torch.no_grad()
     def _dequeue_and_enqueue(self):
@@ -215,6 +223,11 @@ class RealESRGANModel(SRGANModel):
                 l_g_pix = self.cri_pix(self.output, l1_gt)
                 l_g_total += l_g_pix
                 loss_dict['l_g_pix'] = l_g_pix
+            # gradient variance loss
+            if self.cri_grad:
+                l_grad = self.cri_grad(self.output, self.gt)
+                loss_dict['l_grad'] = l_grad
+                l_g_total += l_grad
             # perceptual loss
             if self.cri_perceptual:
                 l_g_percep, l_g_style = self.cri_perceptual(self.output, percep_gt)
