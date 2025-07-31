@@ -239,7 +239,8 @@ class RealESRGANModel(SRGANModel):
                     loss_dict['l_g_style'] = l_g_style
             # gan loss
             fake_g_pred = self.net_d(self.output)
-            l_g_gan = self.cri_gan(fake_g_pred, True, is_disc=False)
+            real_d_pred = self.net_d(gan_gt)
+            l_g_gan = self.cri_gan(real_d_pred, fake_g_pred, is_disc=False)
             l_g_total += l_g_gan
             loss_dict['l_g_gan'] = l_g_gan
 
@@ -252,17 +253,27 @@ class RealESRGANModel(SRGANModel):
 
         self.optimizer_d.zero_grad()
         # real
-        real_d_pred = self.net_d(gan_gt)
-        l_d_real = self.cri_gan(real_d_pred, True, is_disc=True)
-        loss_dict['l_d_real'] = l_d_real
-        loss_dict['out_d_real'] = torch.mean(real_d_pred.detach())
-        l_d_real.backward()
+        # real_d_pred = self.net_d(gan_gt)
+        # l_d_real = self.cri_gan(real_d_pred, True, is_disc=True)
+        # loss_dict['l_d_real'] = l_d_real
+        # loss_dict['out_d_real'] = torch.mean(real_d_pred.detach())
+        # l_d_real.backward()
         # fake
-        fake_d_pred = self.net_d(self.output.detach().clone())  # clone for pt1.9
-        l_d_fake = self.cri_gan(fake_d_pred, False, is_disc=True)
-        loss_dict['l_d_fake'] = l_d_fake
+        # fake_d_pred = self.net_d(self.output.detach().clone())  # clone for pt1.9
+        # l_d_fake = self.cri_gan(fake_d_pred, False, is_disc=True)
+        # loss_dict['l_d_fake'] = l_d_fake
+        # loss_dict['out_d_fake'] = torch.mean(fake_d_pred.detach())
+        # l_d_fake.backward()
+
+        # Discriminator loss (relativistic)
+        real_d_pred = self.net_d(gan_gt)
+        fake_d_pred = self.net_d(self.output.detach().clone())
+        l_d_gan = self.cri_gan(real_d_pred, fake_d_pred, is_disc=True)
+        loss_dict['l_d_gan'] = l_d_gan
+        loss_dict['out_d_real'] = torch.mean(real_d_pred.detach())
         loss_dict['out_d_fake'] = torch.mean(fake_d_pred.detach())
-        l_d_fake.backward()
+        l_d_gan.backward()
+
         self.optimizer_d.step()
 
         if self.ema_decay > 0:

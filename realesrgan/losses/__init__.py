@@ -1,4 +1,6 @@
 from .gradient_variance_loss import GradientVarianceLoss
+from .relativistic_gan_loss import RelativisticAverageGANLoss
 from basicsr.utils.registry import LOSS_REGISTRY
 
 LOSS_REGISTRY.register(GradientVarianceLoss)
+LOSS_REGISTRY.register(RelativisticAverageGANLoss)
