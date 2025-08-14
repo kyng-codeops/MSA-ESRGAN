@@ -276,6 +276,12 @@ class RealESRGANModel(SRGANModel):
 
         self.optimizer_d.step()
 
+        # WGAN weight clipping (only if using WGAN)
+        if getattr(self.cri_gan, 'loss_type', None) == 'wgan':
+            clip_value = 0.01  # You can tune this value
+            for p in self.net_d.parameters():
+                p.data.clamp_(-clip_value, clip_value)
+
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)
 
