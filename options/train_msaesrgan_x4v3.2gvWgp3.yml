@@ -1,0 +1,222 @@
+# general settings
+name: MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3
+model_type: RealESRGANModel
+scale: 4
+num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
+manual_seed: 0
+
+# ----------------- options for synthesizing training data in RealESRGANModel ----------------- #
+# USM the ground-truth
+l1_gt_usm: True
+percep_gt_usm: True
+gan_gt_usm: False
+
+# the first degradation process
+resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
+resize_range: [0.15, 1.5]
+gaussian_noise_prob: 0.5
+noise_range: [1, 30]
+poisson_scale_range: [0.05, 3]
+gray_noise_prob: 0.4
+jpeg_range: [30, 87]
+
+# the second degradation process
+second_blur_prob: 0.8
+resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
+resize_range2: [0.3, 1.2]
+gaussian_noise_prob2: 0.5
+noise_range2: [1, 25]
+poisson_scale_range2: [0.05, 2.5]
+gray_noise_prob2: 0.4
+jpeg_range2: [30, 95]
+
+gt_size: 256
+queue_size: 180
+
+# dataset and data loader settings
+datasets:
+  train:
+    name: iphone14+4kv3
+    type: RealESRGANDataset
+    dataroot_gt: datasets/ds_root
+    meta_info: datasets/ds_root/meta_info/meta_info_iphone14+4kv2_multiscale.txt
+    io_backend:
+      type: disk
+
+    blur_kernel_size: 21
+    kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob: 0.1
+    blur_sigma: [0.2, 4]
+    betag_range: [0.5, 4]
+    betap_range: [1, 2]
+
+    blur_kernel_size2: 21
+    kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob2: 0.1
+    blur_sigma2: [0.2, 2]
+    betag_range2: [0.5, 4]
+    betap_range2: [1, 2]
+
+    final_sinc_prob: 0.8
+
+    gt_size: 256
+    use_hflip: True
+    use_rot: False
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 5
+    batch_size_per_gpu: 12
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  # Uncomment these for validation
+  val:
+    name: validation
+    type: PairedImageDataset
+    dataroot_gt: datasets/ds_root/validation/hq2
+    dataroot_lq: datasets/ds_root/validation/lq2_786k
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: RRDBNet
+  num_in_ch: 3
+  num_out_ch: 3
+  num_feat: 64
+  num_block: 23
+  num_grow_ch: 32
+
+network_d:
+  type: UNetDiscriminator
+  num_in_ch: 3
+  num_feat: 64
+  skip_connection: True
+
+# path
+path:
+  # When using "auto_resume", for iteration zero the pretrain_network_g is used, otherwise
+  # this BasicSR framework will just use the hightest iteration cound net_g, net_d, and state files
+
+  pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v3_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
+  # pretrain_network_g: experiments/MSA-ESRGANx4plus_ip14+4kv3.2gv3/models/net_g_225000.pth
+
+  param_key_g: params_ema
+  strict_load_g: true
+  # pretrain_network_d: experiments/MSA-ESRGANx4plus_ip14+4kv3.2gv3/models/net_d_225000.pth
+  # param_key_d: params_ema
+  # strict_load_d: true
+  # Note: Not attempting a restart, just using a prior initial condition for both generator and discriminator
+  # resume_state: experiments/MSA-ESRGANx4plus_ip14+4kv3.2gv3/training_states/225000.pth
+  resume_state: ~
+
+  #
+  # To restart from a specific point, the net_g and net_d files are needed in the model dir as well as the state file
+  # in the training_states dir.  The pretrain_network_g must be manually reset to the iteration count that matches
+  # the state file of choice.  Example restarting from iteration 320000 with the following parameters uncommented and
+  # without the "--auto_resume" flag on the commandline of train.py.
+  # If you use the --auto_resume flag, basicsr (at least in debug mode) seems to start from the beginning at
+  # iter 0 even with the following uncommented so to restart from a point that's not the last iter,
+  # use the yml file to set the new inital net_g (which also tells it which net_d) weights along with the state
+  # like below.
+
+  #
+
+
+
+# training settings
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 1e-4
+    weight_decay: 0
+    betas: [0.9, 0.99]
+  optim_d:
+    type: Adam
+    lr: !!float 1e-4
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    # The milestones are only honored if setup in the original job (i.e. changes to milestones with restart
+    # will not work and whatever original schedule at iteration 0 is used).
+    # PyTorch milestons are epochs, BasicSR docs say iterations, so the following are iterations cooresponding to
+    # 100 epochs (i.e. 100, 200, 300... 1500).  It makes little sense to do it by iterations (which is
+    # dataset size dependent) when epochs are what relate to statistical significance in training.
+    # milestones: [485000, 960000, 1280000, 1600000, 2400000, 3200000, 4000000, 4800000]
+    # milestones: [1600000, 3200000, 4000000, 4800000]
+    milestones: [1600000]
+    gamma: 0.5
+
+  total_iter: 130000
+  warmup_iter: -1  # no warm up
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+  grad_opt:
+    type: GradientVarianceLoss
+    loss_weight: 1.0
+    reduction: mean
+  # perceptual loss (content and stylecompressor losses)
+  perceptual_opt:
+    type: PerceptualLoss
+    layer_weights:
+      # before relu
+      'conv1_2': 0.1
+      'conv2_2': 0.1
+      'conv3_4': 1
+      'conv4_4': 1
+      'conv5_4': 1
+    vgg_type: vgg19
+    use_input_norm: true
+    perceptual_weight: !!float 1.0
+    style_weight: 0
+    range_norm: false
+    criterion: l1
+  # gan loss
+  gan_opt:
+    type: RelativisticAverageGANLoss
+    loss_type: wgan-gp
+    gp_lambda: 10
+    loss_weight: 0.15
+
+  net_d_iters: 1
+  net_d_init_iters: 0
+
+# Uncomment these for validation
+# validation settings
+val:
+  val_freq: !!float 5e3
+  save_img: False
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 4
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 4
+      test_y_channel: false
+
+# logging settings
+logger:
+  print_freq: 100
+  save_checkpoint_freq: !!float 5e3
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500

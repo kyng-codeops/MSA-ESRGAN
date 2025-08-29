@@ -268,7 +268,10 @@ class RealESRGANModel(SRGANModel):
         # Discriminator loss (relativistic)
         real_d_pred = self.net_d(gan_gt)
         fake_d_pred = self.net_d(self.output.detach().clone())
-        l_d_gan = self.cri_gan(real_d_pred, fake_d_pred, is_disc=True)
+        l_d_gan = self.cri_gan(
+            real_d_pred, fake_d_pred, is_disc=True,
+            real_img=gan_gt, fake_img=self.output.detach().clone(), net_d=self.net_d
+        )
         loss_dict['l_d_gan'] = l_d_gan
         loss_dict['out_d_real'] = torch.mean(real_d_pred.detach())
         loss_dict['out_d_fake'] = torch.mean(fake_d_pred.detach())
@@ -276,11 +279,14 @@ class RealESRGANModel(SRGANModel):
 
         self.optimizer_d.step()
 
-        # WGAN weight clipping (only if using WGAN)
+        # WGAN regularization
         if getattr(self.cri_gan, 'loss_type', None) == 'wgan':
             clip_value = 0.01  # You can tune this value
             for p in self.net_d.parameters():
                 p.data.clamp_(-clip_value, clip_value)
+        elif getattr(self.cri_gan, 'loss_type', None) == 'wgan-gp':
+            # No weight clipping; gradient penalty is added in the loss
+            pass
 
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)

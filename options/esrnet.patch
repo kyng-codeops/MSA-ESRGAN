@@ -1,0 +1,50 @@
+--- options/train_realesrnet_x4plus.yml	2025-02-28 22:59:01.622604721 -0500
++++ ../Real-ESRGAN/options/train_realesrnet_x4plus.yml	2025-08-23 14:38:31.703958993 -0400
+@@ -1,5 +1,5 @@
+ # general settings
+-name: train_RealESRNetx4plus_1000k_B12G4
++name: RealESRNetx4plus_ip14+4kv3
+ model_type: RealESRNetModel
+ scale: 4
+ num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
+@@ -15,7 +15,7 @@
+ noise_range: [1, 30]
+ poisson_scale_range: [0.05, 3]
+ gray_noise_prob: 0.4
+-jpeg_range: [30, 95]
++jpeg_range: [15, 95]
+ 
+ # the second degradation process
+ second_blur_prob: 0.8
+@@ -25,7 +25,7 @@
+ noise_range2: [1, 25]
+ poisson_scale_range2: [0.05, 2.5]
+ gray_noise_prob2: 0.4
+-jpeg_range2: [30, 95]
++jpeg_range2: [15, 95]
+ 
+ gt_size: 256
+ queue_size: 180
+@@ -33,10 +33,10 @@
+ # dataset and data loader settings
+ datasets:
+   train:
+-    name: DF2K+OST
++    name: iphone14+4kv2
+     type: RealESRGANDataset
+-    dataroot_gt: datasets/DF2K
+-    meta_info: datasets/DF2K/meta_info/meta_info_DF2Kmultiscale+OST_sub.txt
++    dataroot_gt: datasets/ds_root
++    meta_info: datasets/ds_root/meta_info/meta_info_iphone14+4kv2_multiscale.txt
+     io_backend:
+       type: disk
+ 
+@@ -108,7 +108,7 @@
+     milestones: [1000000]
+     gamma: 0.5
+ 
+-  total_iter: 1000000
++  total_iter: 3500000
+   warmup_iter: -1  # no warm up
+ 
+   # losses
