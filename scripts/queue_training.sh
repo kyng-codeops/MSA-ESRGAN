@@ -51,8 +51,9 @@
 ##
 ## 3i further strengthens the net_d by using a pretrained net_d from a the 3h run (65k iters)
 ## in the 3h run, net_g is switched back to the stronger 2.95M iters pretrained net_g.
-python realesrgan/train.py -opt options/train_msaesrgan_x4v3.2gvWgp3i.yml --auto_resume
-python realesrgan/train.py -opt options/train_realesrnet_x4cust.yml --auto_resume
+python realesrgan/train.py -opt options/train_msaesrgan_x4v3.2gvWgp3j.yml --auto_resume
+# python realesrgan/train.py -opt options/train_msaesrgan_x4v3.2gvWgp3i.yml --auto_resume
+# python realesrgan/train.py -opt options/train_realesrnet_x4cust.yml --auto_resume
 ## esrnet with higher ssim and psnr values than 3g, but wgan-gp trained 3g images look subjectively better
 ## having high ssim and psnr sometimes indicates not much image enhancement has occurred?
 ## However when comparing iterations within the same model, higher ssim and psnr does correlate sharper clearer images.
