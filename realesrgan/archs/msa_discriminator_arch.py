@@ -98,22 +98,8 @@ class UNetDiscriminator(nn.Module):
         self.final_conv2 = spectral_norm(nn.Conv2d(num_feat, 1, 3, 1, 1))
 
     def forward(self, x):
-        # NOTE: THERE ARE NO SKIPCONNECTIONS?
-        # in the previous UNetDiscriminiator code the skipconnections between x5 and x6 had code that
-        # looked like:
-        #
-        # x4 = ...
-        # x5 = F.leaky_relu(self.conv5(x4), negative_slope=0.2, inplace=True)
-        # if self.skip_connection:
-        #     x5 = x5 + x1
-        # x5 = F.interpolate(x5, scale_factor=2, mode='bilinear', align_corners=False)
-        # x6 = F.leaky_relu(self.conv6(x5), negative_slope=0.2, inplace=True)
-        #
-        # if self.skip_connection:
-        #     x6 = x6 + x0
-        # # extra convolutions
-        # out = F.leaky_relu(self.conv7(x6), negative_slope=0.2, inplace=True)
-        #
+        # NOTE: prior to Wasserstein GAN with gradient penalty, no skip connections
+        # existed even if skip_connection was set to True.
 
         e1 = self.encoder1(x)
         e2 = self.encoder2(e1)
@@ -121,10 +107,22 @@ class UNetDiscriminator(nn.Module):
         e4 = self.encoder4(e3)
 
         d1 = self.up1(e4)
+        # optional residual skip: add corresponding encoder feature
+        if self.skip_connection:
+            # e3 has same channel dim as d1 (num_feat*4)
+            d1 = d1 + e3
         d1 = self.csafm1(d1, e3)
+
         d2 = self.up2(d1)
+        if self.skip_connection:
+            # e2 has same channel dim as d2 (num_feat*2)
+            d2 = d2 + e2
         d2 = self.csafm2(d2, e2)
+
         d3 = self.up3(d2)
+        if self.skip_connection:
+            # e1 has same channel dim as d3 (num_feat)
+            d3 = d3 + e1
         d3 = self.csafm3(d3, e1)
 
         out = self.lrelu(self.final_conv1(d3))

@@ -94,7 +94,7 @@ network_d:
   type: UNetDiscriminator
   num_in_ch: 3
   num_feat: 64
-  skip_connection: True
+  skip_connection: False
 
 # path
 path:

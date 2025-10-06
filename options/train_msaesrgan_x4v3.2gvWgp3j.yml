@@ -94,7 +94,7 @@ network_d:
   type: UNetDiscriminator
   num_in_ch: 3
   num_feat: 64
-  skip_connection: True
+  skip_connection: False
 
 # path
 path:
@@ -151,12 +151,13 @@ train:
     # dataset size dependent) when epochs are what relate to statistical significance in training.
     # milestones: [485000, 960000, 1280000, 1600000, 2400000, 3200000, 4000000, 4800000]
     # milestones: [1600000, 3200000, 4000000, 4800000]
-    milestones: [1905000]
+    milestones: [1905000, 3850000]
     gamma: 0.5
 
   # total_iter: 390000 # epoch 103
   # total_iter: 1945000 # epoch 506
-  total_iter: 3850000 # epoch 1006
+  # total_iter: 3850000 # epoch 1006
+  total_iter: 4240000
   warmup_iter: -1  # no warm up
 
   # losses
