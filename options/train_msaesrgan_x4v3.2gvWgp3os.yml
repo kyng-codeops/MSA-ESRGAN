@@ -1,5 +1,5 @@
 # general settings
-name: MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3j
+name: MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3os
 model_type: RealESRGANModel
 scale: 4
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
@@ -18,7 +18,7 @@ gaussian_noise_prob: 0.5
 noise_range: [1, 30]
 poisson_scale_range: [0.05, 3]
 gray_noise_prob: 0.4
-jpeg_range: [30, 87]
+jpeg_range: [30, 85]
 
 # the second degradation process
 second_blur_prob: 0.8
@@ -94,7 +94,7 @@ network_d:
   type: UNetDiscriminator
   num_in_ch: 3
   num_feat: 64
-  skip_connection: False
+  skip_connection: True
 
 # path
 path:
@@ -102,30 +102,53 @@ path:
   # this BasicSR framework will just use the hightest iteration cound net_g, net_d, and state files
 
   pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v3_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
-  # pretrain_network_g: experiments/RealESRNetx4plus_ip14+4kv3/models/net_g_120000.pth
+  # pretrain_network_g: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ks2/models/net_g_325000.pth
+  # pretrain_network_g: null
   param_key_g: params_ema
   strict_load_g: true
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3g/models/net_d_260000.pth
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3h/models/net_d_65000.pth
-  pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3i/models/net_d_390000.pth
+  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3i/models/net_d_390000.pth
+  #
+  # The above are from transfer training of the discriminator after
+  # modifying the architecture to relativistic Wasserstein with gradient penalty.
+  # The complexity of the new discriminator needed to be built-up significantly
+  # as shown by the generator loss overpowering the discriminator loss.
+  pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3j_net_d_3815000.pth
+  # The above net_d was trained before Unet skip connections were added in
+  # addition to the attention blocks native skip-like connections.  The added
+  # skips seem to greatly improve results reducing high-frequency artifacts.
+  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ks2/models/net_d_325000.pth
+
+  # If a continuation run is needed where lr or milestones change use the
+  # finetune method below.  This will reset the iteration count to 0 because
+  # you would be throwing away the state file. Only other option is to edit
+  # the state file which is more advanced than current capabilities.
+  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ls/models/net_d_xxx000.pth
+
   param_key_d: params_ema
   strict_load_d: true
-  # Note: Not attempting a restart, just using a prior initial condition for both generator and discriminator
-  # resume_state: experiments/MSA-ESRGANx4plus_ip14+4kv3.2gv3/training_states/225000.pth
+
   resume_state: ~
 
-  #
-  # To restart from a specific point, the net_g and net_d files are needed in the model dir as well as the state file
-  # in the training_states dir.  The pretrain_network_g must be manually reset to the iteration count that matches
-  # the state file of choice.  Example restarting from iteration 320000 with the following parameters uncommented and
-  # without the "--auto_resume" flag on the commandline of train.py.
-  # If you use the --auto_resume flag, basicsr (at least in debug mode) seems to start from the beginning at
-  # iter 0 even with the following uncommented so to restart from a point that's not the last iter,
-  # use the yml file to set the new inital net_g (which also tells it which net_d) weights along with the state
-  # like below.
+  # Auto resume from cli just uses last net_g, net_d, and state files. Learning rates
+  # are sealed into the state file as are all optimizer schedules.
+  # as a result auto_resume will ignore yaml reconfigs on lr and milestones.
 
-  #
-
+  # To keep training progress use the specific net_g, net_d without a state file
+  # and make modifications to lr and/or milestones as needed. Iteration count
+  # will be reset to 0 and the optimizers will be reinitialized with new lr and
+  # milestones if changed. Name the yaml as a series to help organize
+  # tensorboard visuals since the charts are really just off-set continuations
+  # of the original training run using a series of yml configs.
+  # This is the same process for finetuning with pretrained networks but
+  # different because the dataset hasn't changed.
+  # Note: the --auto_resume flat is not used (unless a run is being interrupted
+  # to check-in on progress using a test set).  Resuming from a specific point
+  # would also not need the --auto_resume flag (since you specify the net_g,
+  # and state file). Once a state file is specified, net_d will be inferred so
+  # no need to specify net_d.  The cli --auto_resume flag just ignores the
+  # pretrain_network_g parameter and uses the latest net_g and state file.
 
 
 # training settings
@@ -133,31 +156,34 @@ train:
   ema_decay: 0.999
   optim_g:
     type: Adam
-    lr: !!float 5e-5
+    lr: !!float 2.5e-5
     weight_decay: 0
     betas: [0.5, 0.99]
   optim_d:
     type: Adam
-    lr: !!float 16.67e-6
+    lr: !!float 5e-5
     weight_decay: 0
-    betas: [0.5, 0.99]
-
-  scheduler:
+    betas: [0.0, 0.99]   # beta1=0 disables Adam momentum
+    # eps: 1e-8
+  scheduler_g:
     type: MultiStepLR
-    # The milestones are only honored if setup in the original job (i.e. changes to milestones with restart
-    # will not work and whatever original schedule at iteration 0 is used).
-    # PyTorch milestons are epochs, BasicSR docs say iterations, so the following are iterations cooresponding to
-    # 100 epochs (i.e. 100, 200, 300... 1500).  It makes little sense to do it by iterations (which is
-    # dataset size dependent) when epochs are what relate to statistical significance in training.
-    # milestones: [485000, 960000, 1280000, 1600000, 2400000, 3200000, 4000000, 4800000]
-    # milestones: [1600000, 3200000, 4000000, 4800000]
-    milestones: [1905000, 3865000]
+    # Changes to lr and milestones do not work with resume because the
+    # optimizer reads when the run is initiated saves in the state file.
+    # any restart/resume reads from the state file and ignores the yaml.
+    # PyTorch milestons are epochs, but in BasicSR these are iterations
+    # to relate to epochs, dry-run will output how many iterations per epoch.
+    # ip14+4kv3.2 dataset is 3802 iterations per epoch
+    milestones: [100000, 200000, 300000, 400000, 950000, 1275000, 1600000, 1935000]
+    gamma: 0.5
+  scheduler_d:
+    type: MultiStepLR
+    milestones: [65000, 190000, 255000, 320000, 950000, 1275000, 1600000, 1935000]
     gamma: 0.5
 
   # total_iter: 390000 # epoch 103
-  # total_iter: 1945000 # epoch 506
+  total_iter: 1945000 # epoch 506
   # total_iter: 3850000 # epoch 1006
-  total_iter: 4240000
+  # total_iter: 3425000 # epoch 1116
   warmup_iter: -1  # no warm up
 
   # losses
@@ -192,8 +218,8 @@ train:
     gp_lambda: 20
     loss_weight: 0.15
 
-  net_d_iters: 5
-  net_d_init_iters: 100 # loading pretrained net_d 260k + 65k + 390k
+  net_d_iters: 5 # 3j net_d very pretrained gets overconfident w/sm lr
+  net_d_init_iters: 100 # keep since adding skip connections to net_d
 
 # Uncomment these for validation
 # validation settings

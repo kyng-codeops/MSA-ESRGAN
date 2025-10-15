@@ -108,7 +108,7 @@ path:
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3g/models/net_d_260000.pth
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3h/models/net_d_65000.pth
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3i/models/net_d_390000.pth
-  pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3i_net_d_3815000.pth
+  pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3j_net_d_3815000.pth
 
   param_key_d: params_ema
   strict_load_d: true

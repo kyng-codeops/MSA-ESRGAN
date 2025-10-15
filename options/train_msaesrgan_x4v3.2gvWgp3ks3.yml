@@ -1,5 +1,5 @@
 # general settings
-name: MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3j
+name: MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ks3
 model_type: RealESRGANModel
 scale: 4
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
@@ -18,7 +18,7 @@ gaussian_noise_prob: 0.5
 noise_range: [1, 30]
 poisson_scale_range: [0.05, 3]
 gray_noise_prob: 0.4
-jpeg_range: [30, 87]
+jpeg_range: [30, 85]
 
 # the second degradation process
 second_blur_prob: 0.8
@@ -94,25 +94,29 @@ network_d:
   type: UNetDiscriminator
   num_in_ch: 3
   num_feat: 64
-  skip_connection: False
+  skip_connection: True
 
 # path
 path:
   # When using "auto_resume", for iteration zero the pretrain_network_g is used, otherwise
   # this BasicSR framework will just use the hightest iteration cound net_g, net_d, and state files
 
-  pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v3_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
-  # pretrain_network_g: experiments/RealESRNetx4plus_ip14+4kv3/models/net_g_120000.pth
+  # pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v3_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
+  pretrain_network_g: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ks2/models/net_g_325000.pth
+  # pretrain_network_g: null
   param_key_g: params_ema
   strict_load_g: true
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3g/models/net_d_260000.pth
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3h/models/net_d_65000.pth
-  pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3i/models/net_d_390000.pth
+  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3i/models/net_d_390000.pth
+  # pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3i_net_d_3815000.pth
+  pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ks2/models/net_d_325000.pth
+
   param_key_d: params_ema
   strict_load_d: true
   # Note: Not attempting a restart, just using a prior initial condition for both generator and discriminator
-  # resume_state: experiments/MSA-ESRGANx4plus_ip14+4kv3.2gv3/training_states/225000.pth
   resume_state: ~
+  # resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ks2/training_states/325000.state
 
   #
   # To restart from a specific point, the net_g and net_d files are needed in the model dir as well as the state file
@@ -133,31 +137,28 @@ train:
   ema_decay: 0.999
   optim_g:
     type: Adam
-    lr: !!float 5e-5
+    lr: !!float 1.25e-5
     weight_decay: 0
     betas: [0.5, 0.99]
   optim_d:
     type: Adam
-    lr: !!float 16.67e-6
+    lr: !!float 83.35e-7
     weight_decay: 0
     betas: [0.5, 0.99]
-
   scheduler:
     type: MultiStepLR
     # The milestones are only honored if setup in the original job (i.e. changes to milestones with restart
     # will not work and whatever original schedule at iteration 0 is used).
-    # PyTorch milestons are epochs, BasicSR docs say iterations, so the following are iterations cooresponding to
-    # 100 epochs (i.e. 100, 200, 300... 1500).  It makes little sense to do it by iterations (which is
-    # dataset size dependent) when epochs are what relate to statistical significance in training.
-    # milestones: [485000, 960000, 1280000, 1600000, 2400000, 3200000, 4000000, 4800000]
-    # milestones: [1600000, 3200000, 4000000, 4800000]
-    milestones: [1905000, 3865000]
+    # PyTorch milestons are epochs, BasicSR docs say iterations, so the following are iterations
+    # to relate to epochs, dry-run will output how many iterations per epoch.
+    # ip14+4kv3.2 dataset is 3802 iterations per epoch
+    milestones: [325000, 950000, 1900000, 2225000, 2550000, 2875000, 3320000, 3645000, 3965000]
     gamma: 0.5
 
   # total_iter: 390000 # epoch 103
   # total_iter: 1945000 # epoch 506
   # total_iter: 3850000 # epoch 1006
-  total_iter: 4240000
+  total_iter: 3425000 # epoch 1116
   warmup_iter: -1  # no warm up
 
   # losses
@@ -192,8 +193,8 @@ train:
     gp_lambda: 20
     loss_weight: 0.15
 
-  net_d_iters: 5
-  net_d_init_iters: 100 # loading pretrained net_d 260k + 65k + 390k
+  net_d_iters: 5 # keep at 5 since skip-conn is new to pretrained net_d
+  net_d_init_iters: 100 # keep since adding skip connections to net_d
 
 # Uncomment these for validation
 # validation settings
