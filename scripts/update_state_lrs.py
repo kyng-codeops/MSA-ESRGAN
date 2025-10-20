@@ -5,7 +5,13 @@ from collections import Counter
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Update a training state file with a new learning rate and schedule.",
+        description=(
+            "Update a training state file with a new learning rate and schedule.\n"
+            "The new changes are written to a new state file marked xxxxxx.updated.state\n"
+            "where xxxxxx is the original state file iteration.\n\n"
+            "You MUST manually modify the yaml to restart from the updated state file.\n"
+            "This includes ENSURING net_g and net_d pretrained networks are correctly set.\n"
+        ),
         formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
@@ -21,6 +27,12 @@ def load_yaml(yaml_file):
         return yaml.safe_load(f)
 
 def update_state_file(state_file, yaml_data, output_file):
+    """
+        Use the yaml file starting lr and schedule to compute any
+        updated learning rate and milestones based on the current iteration
+        so a restart can honor the desired change in training schedule.
+    """
+
     # Load the state file
     state = torch.load(state_file, map_location="cpu")
     current_iter = state.get("iter", 0)  # Use the correct current iteration count
