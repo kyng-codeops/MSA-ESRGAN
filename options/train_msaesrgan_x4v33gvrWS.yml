@@ -1,5 +1,5 @@
 # general settings
-name: MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o
+name: MSA-ESRGANx4plus_ip14v33gvrWS
 model_type: RealESRGANModel
 scale: 4
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
@@ -18,17 +18,17 @@ gaussian_noise_prob: 0.5
 noise_range: [1, 30]
 poisson_scale_range: [0.05, 3]
 gray_noise_prob: 0.4
-jpeg_range: [30, 85]
+jpeg_range: [15, 75]    # Lower both values from [30, 95] for more compression artifacts
 
 # the second degradation process
-second_blur_prob: 0.8
+second_blur_prob: 0.9    # Increase from 0.8 to 0.9
 resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
 resize_range2: [0.3, 1.2]
 gaussian_noise_prob2: 0.5
 noise_range2: [1, 25]
 poisson_scale_range2: [0.05, 2.5]
 gray_noise_prob2: 0.4
-jpeg_range2: [30, 95]
+jpeg_range2: [15, 75]    # Lower both values from [30, 95]
 
 gt_size: 320
 queue_size: 360   # sys-mon says 10 of 30.5 iGB used so 1.56x inc in gt_sz works
@@ -39,7 +39,9 @@ datasets:
     name: iphone14+4kv3
     type: RealESRGANDataset
     dataroot_gt: datasets/ds_root
-    meta_info: datasets/ds_root/meta_info/meta_info_iphone14+4kv2_multiscale.txt
+    # meta_info: datasets/ds_root/meta_info/meta_info_iphone14+4kv2_multiscale.txt
+    meta_info: datasets/ds_root/meta_info/meta_info_ip14v33.txt
+
     io_backend:
       type: disk
 
@@ -47,7 +49,7 @@ datasets:
     kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
     kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
     sinc_prob: 0.1
-    blur_sigma: [0.2, 4]
+    blur_sigma: [0.2, 4.5]  # Increase upper bound from 3 to 4.5 for more blur
     betag_range: [0.5, 4]
     betap_range: [1, 2]
 
@@ -55,7 +57,7 @@ datasets:
     kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
     kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
     sinc_prob2: 0.1
-    blur_sigma2: [0.2, 2]
+    blur_sigma2: [0.2, 2.5]  # Increase upper bound from 1.5 to 2.5
     betag_range2: [0.5, 4]
     betap_range2: [1, 2]
 
@@ -101,9 +103,7 @@ path:
   # When using "auto_resume", for iteration zero the pretrain_network_g is used, otherwise
   # this BasicSR framework will just use the hightest iteration cound net_g, net_d, and state files
 
-  # pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v3_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
-  # pretrain_network_g: null
-  pretrain_network_g: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/models/net_g_365000.pth
+  pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v3_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
   param_key_g: params_ema
   strict_load_g: true
 
@@ -125,8 +125,7 @@ path:
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ns1/models/net_d_45000.pth
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ns1a/models/net_d_85000.pth
 
-  # pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3ns1a_net_d_85k-eqv190k.pth
-  pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/models/net_d_365000.pth
+  pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3ns1a_net_d_85k-eqv190k.pth
 
   # If a continuation run is needed where lr or milestones change use the
   # finetune method below.  This will reset the iteration count to 0 because
@@ -138,11 +137,8 @@ path:
   param_key_d: params_ema
   strict_load_d: true
 
-  # resume_state: ~
-  # resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/training_states/190000_updated.state
-  # resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/training_states/280000.state
-  # resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/training_states/435000_updated.state
-  resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/training_states/550000.state
+  resume_state: ~
+
 
   # Auto resume from cli just uses last net_g, net_d, and state files. Learning rates
   # are sealed into the state file as are all optimizer schedules.
@@ -174,7 +170,7 @@ train:
     betas: [0.5, 0.99]
   optim_d:
     type: Adam
-    lr: !!float 2.5e-5
+    lr: !!float 1.67e-5
     weight_decay: 0
     betas: [0.0, 0.99]   # beta1=0 disables Adam momentum
     # eps: 1e-8
@@ -184,13 +180,14 @@ train:
     # optimizer initial lr sched calc is held in mem and re-saved at each state.
     # Resume always reads from some state file which superceds yaml values.
     # PyTorch milestons are epochs, BasicSR are iterations.
-    milestones: [19010, 38020, 57030, 76040, 197600, 216600, 235600, 314200, 333200, 354000, 373665, 393330, 399200, 419160, 438800, 457800]
+    milestones: [4210, 46310, 88410, 130510, 172610, 214710, 256810, 298910, 341010, 383110, 425210, 467310, 509410, 551510, 593610, 635710, 677810, 719910, 762010, 804110, 846210, 888310, 930410, 972510, 1014610, 1056710, 1098810, 1140910, 1183010, 1225110]
     gamma: 0.9
 
   # A dry-run will compute iterations per epoch.
   # Example, ip14+4kv3.2 dataset is 3802 iterations per epoch
-  total_iter: 590000 # 105.2 epoch
-  warmup_iter: -1  # no warm up
+  # Example, ip14v33 dataset is 4210 iterations per epoch
+  total_iter: 842000  # 200 epochs for ip14v33
+  warmup_iter: 4210  # 1st epoch
 
   # losses
   pixel_opt:
@@ -230,7 +227,7 @@ train:
 # Uncomment these for validation
 # validation settings
 val:
-  val_freq: !!float 5e3
+  val_freq: !!float 8420
   save_img: False
 
   metrics:
@@ -246,7 +243,7 @@ val:
 # logging settings
 logger:
   print_freq: 100
-  save_checkpoint_freq: !!float 5e3
+  save_checkpoint_freq: !!float 8420
   use_tb_logger: true
   wandb:
     project: ~

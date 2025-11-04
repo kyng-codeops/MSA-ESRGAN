@@ -1,5 +1,5 @@
 # general settings
-name: MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o
+name: MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3p
 model_type: RealESRGANModel
 scale: 4
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
@@ -103,7 +103,7 @@ path:
 
   # pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v3_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
   # pretrain_network_g: null
-  pretrain_network_g: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/models/net_g_365000.pth
+  # pretrain_network_g: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/models/net_g_305000.pth
   param_key_g: params_ema
   strict_load_g: true
 
@@ -126,7 +126,7 @@ path:
   # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ns1a/models/net_d_85000.pth
 
   # pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3ns1a_net_d_85k-eqv190k.pth
-  pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/models/net_d_365000.pth
+  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/models/net_d_305000.pth
 
   # If a continuation run is needed where lr or milestones change use the
   # finetune method below.  This will reset the iteration count to 0 because
@@ -141,8 +141,9 @@ path:
   # resume_state: ~
   # resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/training_states/190000_updated.state
   # resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/training_states/280000.state
-  # resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/training_states/435000_updated.state
-  resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/training_states/550000.state
+  # resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3p/training_states/305000.state
+  # resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3p/training_states/620000_updated.state
+  resume_state: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3p/training_states/955000.state
 
   # Auto resume from cli just uses last net_g, net_d, and state files. Learning rates
   # are sealed into the state file as are all optimizer schedules.
@@ -184,12 +185,12 @@ train:
     # optimizer initial lr sched calc is held in mem and re-saved at each state.
     # Resume always reads from some state file which superceds yaml values.
     # PyTorch milestons are epochs, BasicSR are iterations.
-    milestones: [19010, 38020, 57030, 76040, 197600, 216600, 235600, 314200, 333200, 354000, 373665, 393330, 399200, 419160, 438800, 457800]
+    milestones: [19010, 38020, 57030, 76040, 197600, 216600, 235600, 314200, 333200, 354000, 376400, 395400, 416600, 435600, 457800, 550600, 643400, 760400, 855450, 950500, 1045550, 1140600, 1235650]
     gamma: 0.9
 
   # A dry-run will compute iterations per epoch.
   # Example, ip14+4kv3.2 dataset is 3802 iterations per epoch
-  total_iter: 590000 # 105.2 epoch
+  total_iter: 1250000
   warmup_iter: -1  # no warm up
 
   # losses
