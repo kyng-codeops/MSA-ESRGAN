@@ -6,6 +6,7 @@ import queue
 import threading
 import torch
 from basicsr.utils.download_util import load_file_from_url
+from basicsr.archs.rrdbnet_arch import RRDBNet
 from torch.nn import functional as F
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -67,7 +68,22 @@ class RealESRGANer():
             keyname = 'params_ema'
         else:
             keyname = 'params'
-        model.load_state_dict(loadnet[keyname], strict=True)
+
+        # Instantiate default model if model is None
+        if model is None:
+            model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=scale)
+
+        # Use strict=False to test if weights can load into a default RRDBNet
+        model.load_state_dict(loadnet[keyname], strict=False)
+
+        # Then add logging to show what was actually loaded
+        missing_keys = set(model.state_dict().keys()) - set(loadnet[keyname].keys())
+        unexpected_keys = set(loadnet[keyname].keys()) - set(model.state_dict().keys())
+
+        if missing_keys:
+            print(f"Warning: Missing keys in state dict: {missing_keys}")
+        if unexpected_keys:
+            print(f"Warning: Unexpected keys in state dict: {unexpected_keys}")
 
         model.eval()
         self.model = model.to(self.device)

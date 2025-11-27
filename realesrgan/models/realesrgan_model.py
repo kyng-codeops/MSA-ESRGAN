@@ -292,3 +292,26 @@ class RealESRGANModel(SRGANModel):
             self.model_ema(decay=self.ema_decay)
 
         self.log_dict = self.reduce_loss_dict(loss_dict)
+
+        # Log discriminator gap for monitoring
+        with torch.no_grad():
+            d_real = torch.mean(real_d_pred.detach())
+            d_fake = torch.mean(fake_d_pred.detach())
+            d_gap = torch.abs(d_real - d_fake)
+            self.log_dict['d_gap'] = d_gap
+        """
+        How It Works:
+            d_real and d_fake: Average discriminator predictions for real and fake images
+            d_gap: Absolute difference between them
+            Added to self.log_dict: Automatically logged to TensorBoard by the parent class
+
+        What to Look For in TensorBoard:
+            d_gap close to 1.0: Discriminator is well-separated (good sign)
+            d_gap close to 0: Discriminator can't distinguish real from fake (bad sign)
+            d_gap decreasing over time: Discriminator becoming confused (generator winning)
+            d_gap increasing over time: Discriminator getting stronger (may overpower generator)
+
+        Ideal Range:
+            For stable GAN training, aim for d_gap to stay in the range 0.5-0.8 and remain
+            relatively stable over iterations.
+        """

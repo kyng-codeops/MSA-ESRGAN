@@ -4,7 +4,7 @@ Script to inspect the structure of a PyTorch state file,
 focusing on optimizer and scheduler components for debugging the update_state_lrs.py script.
 
 """
-state_file = "experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3o/training_states/190000.state"
+state_file = "experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ns1a/training_states/130000.state"
 state = torch.load(state_file, map_location="cpu")
 
 # Print the top-level keys
@@ -25,12 +25,25 @@ else:
 
 if "schedulers" in state:
     try:
-        print("Scheduler state keys:", state["schedulers"].keys())
+        # Training ESR-NET has not GAN so only one scheduler exists
+        # print("Scheduler state keys:", state["schedulers"].keys())
+        for key in state["schedulers"].keys():
+            print(f"\t{key}\n")
         print("Scheduler milestones:", state["schedulers"]["milestones"], "\n\n")
     except AttributeError:
-        for elem in state["schedulers"]:
-            print("Scheduler element keys:", elem.keys())
+        # Training ESR-GAN element 0 tends to be the generator schedule, and element 1 the discriminator.
+        for idx, elem in enumerate(state["schedulers"]):
+            print(f"Scheduler [{idx}] keys:")
+            for key in elem.keys():
+                print(f"\t{key}")
+            print("\n")
             if "milestones" in elem:
-                print("Scheduler milestones:", elem["milestones"], "\n\n")
+                print(f"\tScheduler [{idx}]['milestones']:\n\t", elem["milestones"], "\n")
+                print("\tbase_lrs: {}\n\t_step_count: {}\n\tlast_epoch: {}\n".format(
+                    elem["base_lrs"],
+                    elem["_step_count"],
+                    elem["last_epoch"]
+                ))
+                print("")
 else:
     print("No 'optimizer' key found in state file.", "\n\n")

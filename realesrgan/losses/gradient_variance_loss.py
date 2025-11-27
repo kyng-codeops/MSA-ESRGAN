@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class GradientVarianceLoss(nn.Module):
     def __init__(self, reduction='mean', **kwargs):  # <-- add **kwargs
         super(GradientVarianceLoss, self).__init__()
@@ -25,8 +26,8 @@ class GradientVarianceLoss(nn.Module):
         target_grad_y = gradient(target, sobel_y)
 
         # Compute variance of gradients
-        pred_var = torch.var(pred_grad_x, dim=[2,3]) + torch.var(pred_grad_y, dim=[2,3])
-        target_var = torch.var(target_grad_x, dim=[2,3]) + torch.var(target_grad_y, dim=[2,3])
+        pred_var = torch.var(pred_grad_x, dim=[2, 3]) + torch.var(pred_grad_y, dim=[2, 3])
+        target_var = torch.var(target_grad_x, dim=[2, 3]) + torch.var(target_grad_y, dim=[2, 3])
 
         loss = torch.abs(pred_var - target_var)
         if self.reduction == 'mean':

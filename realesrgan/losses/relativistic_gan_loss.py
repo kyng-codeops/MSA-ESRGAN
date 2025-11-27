@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class RelativisticAverageGANLoss(nn.Module):
     def __init__(self, loss_type='bce', gp_lambda=10, **kwargs):
         super().__init__()

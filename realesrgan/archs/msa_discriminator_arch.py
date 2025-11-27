@@ -1,8 +1,9 @@
 from basicsr.utils.registry import ARCH_REGISTRY
 import torch
 from torch import nn as nn
-from torch.nn import functional as F
+# from torch.nn import functional as F
 from torch.nn.utils import spectral_norm
+
 
 class ChannelAttention(nn.Module):
     def __init__(self, num_in_ch):
@@ -29,6 +30,7 @@ class ChannelAttention(nn.Module):
         attention = self.sigmoid(combined)
         return x * attention
 
+
 class SpatialAttention(nn.Module):
     def __init__(self, kernel_size=7):
         super(SpatialAttention, self).__init__()
@@ -42,6 +44,7 @@ class SpatialAttention(nn.Module):
         attention = self.sigmoid(self.conv(combined))
         return x * attention
 
+
 class CSAFM(nn.Module):
     def __init__(self, num_in_ch):
         super(CSAFM, self).__init__()
@@ -54,6 +57,7 @@ class CSAFM(nn.Module):
         sa_out = self.spatial_attention(ca_out)
         return (sa_out * x) + (sa_out * y) + sa_out
 
+
 class DownBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(DownBlock, self).__init__()
@@ -63,17 +67,19 @@ class DownBlock(nn.Module):
     def forward(self, x):
         return self.lrelu(self.conv(x))
 
+
 class UpBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UpBlock, self).__init__()
         self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         self.conv = spectral_norm(
-                nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
-            )
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
+        )
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
     def forward(self, x):
         return self.lrelu(self.conv(self.lrelu(self.upsample(x))))
+
 
 @ARCH_REGISTRY.register()
 class UNetDiscriminator(nn.Module):

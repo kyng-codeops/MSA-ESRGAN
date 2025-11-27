@@ -37,52 +37,76 @@ def update_state_file(state_file, yaml_data, output_file):
     state = torch.load(state_file, map_location="cpu")
     current_iter = state.get("iter", 0)  # Use the correct current iteration count
 
-    # Get learning rate and scheduler from YAML
-    lr = yaml_data["train"]["optim_g"]["lr"]
+    # Get generator learning rate and scheduler from YAML
+    lr_g = yaml_data["train"]["optim_g"]["lr"]
+    lr_d = yaml_data["train"]["optim_d"]["lr"]
     scheduler = yaml_data["train"]["scheduler"]
     scheduler_type = scheduler["type"]
 
-    # Compute the new learning rate based on the scheduler
+    # Compute the new generator learning rate based on the scheduler
     if scheduler_type == "MultiStepLR":
         milestones = scheduler["milestones"]
         gamma = scheduler["gamma"]
-        new_lr = lr
+        new_lr_g = lr_g
         for milestone in milestones:
             if current_iter >= milestone:
-                new_lr *= gamma
+                new_lr_g *= gamma
     elif scheduler_type == "CosineAnnealingLR":
         T_max = scheduler["T_max"]
         eta_min = scheduler["eta_min"]
-        new_lr = eta_min + (lr - eta_min) * (1 + torch.cos(torch.tensor(current_iter / T_max * 3.141592653589793))) / 2
+        new_lr_g = eta_min + (lr_g - eta_min) * (1 + torch.cos(torch.tensor(current_iter / T_max * 3.141592653589793))) / 2
     else:
         raise NotImplementedError(f"Scheduler type {scheduler_type} is not supported.")
 
-    # Update the optimizer's learning rate in the state file
+    # Compute the new discriminator learning rate based on the scheduler
+    if scheduler_type == "MultiStepLR":
+        milestones = scheduler["milestones"]
+        gamma = scheduler["gamma"]
+        new_lr_d = lr_d
+        for milestone in milestones:
+            if current_iter >= milestone:
+                new_lr_d *= gamma
+    elif scheduler_type == "CosineAnnealingLR":
+        T_max = scheduler["T_max"]
+        eta_min = scheduler["eta_min"]
+        new_lr_d = eta_min + (lr_d - eta_min) * (1 + torch.cos(torch.tensor(current_iter / T_max * 3.141592653589793))) / 2
+
+    # Update the optimizer's learning rates in the state file
     if "optimizers" in state:
-        for optimizer_state in state["optimizers"]:
+        for idx, optimizer_state in enumerate(state["optimizers"]):
             if "param_groups" in optimizer_state:
                 for param_group in optimizer_state["param_groups"]:
-                    param_group["lr"] = new_lr
-                print(f"Updated optimizer learning rate to: {new_lr}")
+                    if idx == 0:
+                        # Generator optimizer (index 0)
+                        param_group["lr"] = new_lr_g
+                        print(f"Updated generator optimizer learning rate to: {new_lr_g}")
+                    elif idx == 1:
+                        # Discriminator optimizer (index 1)
+                        param_group["lr"] = new_lr_d
+                        print(f"Updated discriminator optimizer learning rate to: {new_lr_d}")
             else:
-                print("Warning: 'param_groups' not found in optimizer state.")
+                print(f"Warning: 'param_groups' not found in optimizer state [{idx}].")
     else:
         print("Warning: 'optimizers' key not found in the state file.")
 
     # Update the scheduler milestones in the state file
     if "schedulers" in state:
-        for scheduler_state in state["schedulers"]:
+        for idx, scheduler_state in enumerate(state["schedulers"]):
             if "milestones" in scheduler_state:
                 # Convert milestones from YAML (list) to Counter
                 scheduler_state["milestones"] = Counter(scheduler["milestones"])
-                print(f"Updated scheduler milestones to: {scheduler_state['milestones']}")
+                print(f"Updated scheduler [{idx}] milestones to: {scheduler_state['milestones']}")
             else:
-                print("Warning: 'milestones' not found in scheduler state.")
+                print(f"Warning: 'milestones' not found in scheduler state [{idx}].")
     else:
         print("Warning: 'schedulers' key not found in the state file.")
 
     # Save the updated state file
     torch.save(state, output_file)
+
+    # Compute and return the learning rate ratio
+    lr_ratio = new_lr_d / new_lr_g if new_lr_g != 0 else 0
+    return new_lr_g, new_lr_d, lr_ratio
 
 def main():
     args = parse_args()
@@ -94,9 +118,16 @@ def main():
     updated_state_file = args.state.replace(".state", "_updated.state")
 
     # Update the state file
-    update_state_file(args.state, yaml_data, updated_state_file)
+    new_lr_g, new_lr_d, lr_ratio = update_state_file(args.state, yaml_data, updated_state_file)
 
-    print(f"Updated state file saved to: {updated_state_file}")
+    print(f"\nUpdated state file saved to: {updated_state_file}")
+    print("\n" + "="*60)
+    print("LEARNING RATE SUMMARY")
+    print("="*60)
+    print(f"Generator (net_g) learning rate:    {new_lr_g:.6e}")
+    print(f"Discriminator (net_d) learning rate: {new_lr_d:.6e}")
+    print(f"Learning rate ratio (net_d / net_g): {lr_ratio:.4f}")
+    print("="*60)
 
 if __name__ == "__main__":
     main()
