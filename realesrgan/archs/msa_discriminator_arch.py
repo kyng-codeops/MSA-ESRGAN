@@ -12,10 +12,11 @@ class ChannelAttention(nn.Module):
         self.conv1 = nn.Conv2d(num_in_ch, num_in_ch // 2, 1, bias=False)
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         self.conv2 = nn.Conv2d(num_in_ch // 2, num_in_ch, 1, bias=False)
-        self.batch_norm = nn.BatchNorm2d(num_in_ch)
+        # Increase epsilon for numerical stability
+        self.batch_norm = nn.BatchNorm2d(num_in_ch, eps=1e-3, momentum=0.01)
 
         self.conv3 = nn.Conv2d(num_in_ch, num_in_ch, 1, bias=False)
-        self.batch_norm2 = nn.BatchNorm2d(num_in_ch)
+        self.batch_norm2 = nn.BatchNorm2d(num_in_ch, eps=1e-3, momentum=0.01)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
