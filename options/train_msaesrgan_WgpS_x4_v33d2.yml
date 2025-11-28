@@ -1,5 +1,5 @@
 # general settings
-name: MSA-ESRGANx4plus_ip14v33gvrWS
+name: MSA-ESRGAN-gvWgpS_x4_ip14v33-d2
 model_type: RealESRGANModel
 scale: 4
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
@@ -138,8 +138,10 @@ path:
   param_key_d: params_ema
   strict_load_d: true
 
-  resume_state: experiments/MSA-ESRGANx4plus_ip14v33gvrWS/training_states/185240_updated.state
-  # resume_state: ~
+  # resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2/training_states/522040_updated.state
+  # resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2/training_states/791480_updated.state
+  # resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2/training_states/749380_updated.state
+  resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2/training_states/825160.state
 
 
   # Auto resume from cli just uses last net_g, net_d, and state files. Learning rates
@@ -172,8 +174,8 @@ train:
     betas: [0.5, 0.99]
   optim_d:
     type: Adam
-    # lr: !!float 3.363e-5
-    lr: !!float 5.0445e-5
+    lr: !!float 3.363e-5
+    # lr: !!float 5.0445e-5
     weight_decay: 0
     betas: [0.0, 0.99]   # beta1=0 disables Adam momentum
     # eps: 1e-8
@@ -183,13 +185,13 @@ train:
     # optimizer initial lr sched calc is held in mem and re-saved at each state.
     # Resume always reads from some state file which superceds yaml values.
     # PyTorch milestons are epochs, BasicSR are iterations.
-    milestones: [42100, 84200, 122090, 164190, 206290, 311540, 416790, 522040, 627290, 837790, 1048290, 1258790]
+    milestones: [42100, 84200, 122090, 164190, 206290, 311540, 416790, 627290, 749380, 1048290]
     gamma: 0.9
 
   # A dry-run will compute iterations per epoch.
   # Example, ip14+4kv3.2 dataset is 3802 iterations per epoch
   # Example, ip14v33 dataset is 4210 iterations per epoch
-  total_iter: 842000  # 200 epochs for ip14v33
+  total_iter: 1347200  # 200 epochs for ip14v33
   warmup_iter: 42100
 
   # losses
@@ -221,7 +223,7 @@ train:
   gan_opt:
     type: RelativisticAverageGANLoss
     loss_type: wgan-gp
-    gp_lambda: 20
+    gp_lambda: 5
     loss_weight: 0.15
 
   net_d_iters: 1
@@ -230,7 +232,7 @@ train:
 # Uncomment these for validation
 # validation settings
 val:
-  val_freq: !!float 8420
+  val_freq: 8420
   save_img: False
 
   metrics:
@@ -246,7 +248,7 @@ val:
 # logging settings
 logger:
   print_freq: 100
-  save_checkpoint_freq: !!float 8420
+  save_checkpoint_freq: 8420
   use_tb_logger: true
   wandb:
     project: ~
