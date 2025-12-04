@@ -12,20 +12,22 @@ class ChannelAttention(nn.Module):
         self.conv1 = nn.Conv2d(num_in_ch, num_in_ch // 2, 1, bias=False)
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         self.conv2 = nn.Conv2d(num_in_ch // 2, num_in_ch, 1, bias=False)
-        # Increase epsilon for numerical stability
-        self.batch_norm = nn.BatchNorm2d(num_in_ch, eps=1e-3, momentum=0.01)
+        # Use GroupNorm instead of BatchNorm - more stable for GANs
+        num_groups = min(32, num_in_ch // 2)  # Ensure num_groups divides num_in_ch
+        self.group_norm = nn.GroupNorm(num_groups, num_in_ch)
 
         self.conv3 = nn.Conv2d(num_in_ch, num_in_ch, 1, bias=False)
-        self.batch_norm2 = nn.BatchNorm2d(num_in_ch, eps=1e-3, momentum=0.01)
+        num_groups2 = min(32, num_in_ch // 2)
+        self.group_norm2 = nn.GroupNorm(num_groups2, num_in_ch)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         avg_out = self.conv1(self.avg_pool(x))
         avg_out = self.lrelu(avg_out)
-        avg_out = self.batch_norm(self.conv2(avg_out))
+        avg_out = self.group_norm(self.conv2(avg_out))
 
         conv_out = self.conv3(x)
-        conv_out = self.batch_norm2(self.lrelu(conv_out))
+        conv_out = self.group_norm2(self.lrelu(conv_out))
 
         combined = avg_out + conv_out
         attention = self.sigmoid(combined)

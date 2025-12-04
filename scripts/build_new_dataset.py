@@ -4,9 +4,11 @@ import sys
 from pathlib import Path
 from typing import List
 
+
 class ScriptError(Exception):
     """Custom exception for script-specific errors."""
     pass
+
 
 def validate_working_directory():
     """Ensure script is run from the MSA-ESRGAN root directory."""
@@ -25,6 +27,7 @@ def validate_working_directory():
                 "Please run: cd /path/to/MSA-ESRGAN"
             )
 
+
 def check_conda_env():
     """Verify correct conda environment is active."""
     conda_prefix = os.environ.get('CONDA_PREFIX', '')
@@ -35,6 +38,7 @@ def check_conda_env():
             "Incorrect conda environment!\n"
             "Please run: conda activate cuda-torch"
         )
+
 
 def setup_datasets(ds_prefix: str, ds_names: List[str], meta_name: str):
     """Process multiple datasets and create meta info with custom name."""
@@ -87,6 +91,7 @@ def setup_datasets(ds_prefix: str, ds_names: List[str], meta_name: str):
     except (OSError, IOError) as e:
         raise ScriptError(f"File system error: {str(e)}")
 
+
 def main():
     try:
         validate_working_directory()
@@ -108,6 +113,7 @@ def main():
     except Exception as e:
         print(f"Unexpected error: {str(e)}", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

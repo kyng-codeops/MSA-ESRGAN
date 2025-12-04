@@ -293,25 +293,35 @@ class RealESRGANModel(SRGANModel):
 
         self.log_dict = self.reduce_loss_dict(loss_dict)
 
-        # Log discriminator gap for monitoring
-        with torch.no_grad():
-            d_real = torch.mean(real_d_pred.detach())
-            d_fake = torch.mean(fake_d_pred.detach())
-            d_gap = torch.abs(d_real - d_fake)
-            self.log_dict['d_gap'] = d_gap
+        # Compute d_gap from already-logged values
+        if 'out_d_real' in self.log_dict and 'out_d_fake' in self.log_dict:
+            # Use abs() instead of torch.abs() since log_dict contains floats
+            self.log_dict['d_gap'] = abs(
+                self.log_dict['out_d_real'] - self.log_dict['out_d_fake']
+            )
         """
-        How It Works:
+        How It Works for GANs & WGANs:
             d_real and d_fake: Average discriminator predictions for real and fake images
             d_gap: Absolute difference between them
             Added to self.log_dict: Automatically logged to TensorBoard by the parent class
 
-        What to Look For in TensorBoard:
+        What to Look For in TensorBoard (GANs):
             d_gap close to 1.0: Discriminator is well-separated (good sign)
             d_gap close to 0: Discriminator can't distinguish real from fake (bad sign)
             d_gap decreasing over time: Discriminator becoming confused (generator winning)
             d_gap increasing over time: Discriminator getting stronger (may overpower generator)
 
-        Ideal Range:
-            For stable GAN training, aim for d_gap to stay in the range 0.5-0.8 and remain
-            relatively stable over iterations.
+            Ideal Range:
+                For stable GAN training, aim for d_gap to stay in the range 0.5-0.8 and remain
+                relatively stable over iterations.
+
+        What to Look For in TensorBoard (WGANs):
+            d_gap close to 0: Discriminator (critic) is well-balanced (good sign
+            d_gap significantly above 0: Critic may be overpowering generator (bad sign)
+            d_gap decreasing over time: Critic should slowly decay to 0 (where 0 is perfect generation)
+
+            Scale l_g_gan magnitude to balance with other loss magnitudes. Critic requires gradient magnitude
+            scaling both to get started and to actively participate in training. Critic needs this to learn
+            from the generator to get started (always start net_d from random because net_d is
+            custom fit to net_g at each state -- they are matched pairs).
         """

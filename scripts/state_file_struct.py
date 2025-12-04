@@ -4,7 +4,7 @@ Script to inspect the structure of a PyTorch state file,
 focusing on optimizer and scheduler components for debugging the update_state_lrs.py script.
 
 """
-state_file = "experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ns1a/training_states/130000.state"
+state_file = "experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-gr128-nbl/training_states/231561_updated.state"
 state = torch.load(state_file, map_location="cpu")
 
 # Print the top-level keys
