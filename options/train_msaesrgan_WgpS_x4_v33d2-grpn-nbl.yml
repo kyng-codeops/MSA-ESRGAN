@@ -139,8 +139,8 @@ path:
   param_key_d: params_ema
   strict_load_d: true
 
-  resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-gr128-nbl/training_states/477156_updated.state
-  # 322782.state
+  resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-gr128-nbl/training_states/603462_updated.state
+  # 477156_updated.state
   # 280680_updated.state
   # 217527_updated.state
   # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-gr128-nbl/training_states/161391.state
@@ -192,7 +192,7 @@ train:
     # Use the update_states.py script to modify state files to update LR
     # between restarts.
     # PyTorch milestons are epochs, BasicSR are iterations.
-    milestones: [217527, 280680, 463122, 968346]
+    milestones: [217527, 280680, 463122, 603462, 968346]
     gamma: 0.5
 
   # A dry-run will compute iterations per epoch.
@@ -206,7 +206,8 @@ train:
     type: L1Loss
     # loss_weight: 1.0
     # loss_weight: 1.9 # restart @70k, @119k
-    loss_weight: 2.04 # restart @161k
+    # loss_weight: 2.04 # restart @161k
+    loss_weight: 2.5 # restart @512k
     reduction: mean
   grad_opt:
     type: GradientVarianceLoss
