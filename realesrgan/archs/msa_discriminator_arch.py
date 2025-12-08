@@ -128,7 +128,8 @@ class UNetDiscriminator(nn.Module):
         d3 = self.csafm3(d3, e1)
 
         out = self.lrelu(self.final_conv1(d3))
-        out = self.lrelu(self.final_conv1(out))
-        out = self.lrelu(self.final_conv2(out))
+        # out = self.lrelu(self.final_conv1(out))   # BUG: re-conv makes no sense
+        # out = self.lrelu(self.final_conv2(out))   # BUG: activate output makes no sense
+        out = self.final_conv2(out)
 
         return out
