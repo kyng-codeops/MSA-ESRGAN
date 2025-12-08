@@ -115,7 +115,7 @@ def main():
     yaml_data = load_yaml(args.opt)
 
     # Generate the updated state file name
-    updated_state_file = args.state.replace(".state", "_updated.state")
+    updated_state_file = args.state.replace(".state", ".state.updated")
 
     # Update the state file
     new_lr_g, new_lr_d, lr_ratio = update_state_file(args.state, yaml_data, updated_state_file)

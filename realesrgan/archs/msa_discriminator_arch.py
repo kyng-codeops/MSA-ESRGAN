@@ -116,26 +116,22 @@ class UNetDiscriminator(nn.Module):
         e4 = self.encoder4(e3)
 
         d1 = self.up1(e4)
-        # optional residual skip: add corresponding encoder feature
         if self.skip_connection:
-            # e3 has same channel dim as d1 (num_feat*4)
             d1 = d1 + e3
         d1 = self.csafm1(d1, e3)
 
         d2 = self.up2(d1)
         if self.skip_connection:
-            # e2 has same channel dim as d2 (num_feat*2)
             d2 = d2 + e2
         d2 = self.csafm2(d2, e2)
 
         d3 = self.up3(d2)
         if self.skip_connection:
-            # e1 has same channel dim as d3 (num_feat)
             d3 = d3 + e1
         d3 = self.csafm3(d3, e1)
 
+        # Fixed: Apply final_conv1 once, then final_conv2 without activation
         out = self.lrelu(self.final_conv1(d3))
-        out = self.lrelu(self.final_conv1(out))
-        out = self.lrelu(self.final_conv2(out))
+        out = self.final_conv2(out)  # No activation on final output
 
         return out

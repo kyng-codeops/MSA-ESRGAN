@@ -1,5 +1,5 @@
 # general settings
-name: MSA-ESRGAN-gvWgpS_x4_ip14v33-d2
+name: MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix
 model_type: RealESRGANModel
 scale: 4
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
@@ -30,9 +30,10 @@ poisson_scale_range2: [0.05, 2.5]
 gray_noise_prob2: 0.4
 jpeg_range2: [15, 75]    # Lower both values from [30, 95]
 
-gt_size: 320
-queue_size: 360   # sys-mon says 10 of 30.5 iGB used so 1.56x inc in gt_sz works
-batch_size_per_gpu: 5
+gt_size: 256
+queue_size: 180
+
+batch_size_per_gpu: 5  # Changed from 4
 
 datasets:
   train:
@@ -63,14 +64,14 @@ datasets:
 
     final_sinc_prob: 0.8
 
-    gt_size: 320
+    gt_size: 256  # Changed from 320
     use_hflip: True
     use_rot: False
 
     # data loader
     use_shuffle: true
     num_worker_per_gpu: 5
-    batch_size_per_gpu: 5
+    batch_size_per_gpu: 5  # Changed from 4
     dataset_enlarge_ratio: 1
     prefetch_mode: ~
 
@@ -95,7 +96,7 @@ network_g:
 network_d:
   type: UNetDiscriminator
   num_in_ch: 3
-  num_feat: 64
+  num_feat: 128  # Keep at 128 for discriminator balance
   skip_connection: True
 
 # path
@@ -108,48 +109,22 @@ path:
   param_key_g: params_ema
   strict_load_g: true
 
-  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3g/models/net_d_260000.pth
-  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3h/models/net_d_65000.pth
-  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3i/models/net_d_390000.pth
-  #
-  # The above are from transfer training of the discriminator after
-  # modifying the architecture to relativistic Wasserstein with gradient penalty.
-  # The complexity of the new discriminator needed to be built-up significantly
-  # as shown by the generator loss overpowering the discriminator loss.
-  # pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3j_net_d_3815000.pth
-  # The above net_d was trained before Unet skip connections were added in
-  # addition to the attention blocks native skip-like connections.  The added
-  # skips seem to greatly improve results reducing high-frequency artifacts.
-
-  # pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3j_net_d_3815000.pth
-  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ns/models/net_d_60000.pth
-  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ns1/models/net_d_45000.pth
-  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ns1a/models/net_d_85000.pth
-
-  pretrain_network_d: experiments/pretrained_models/ip14v32-gvWgp3ns1a_net_d_85k-eqv190k.pth
-
-  # If a continuation run is needed where lr or milestones change use the
-  # finetune method below.  This will reset the iteration count to 0 because
-  # you would be throwing away the state file. Only other option is to edit
-  # the state file which is more advanced than current capabilities.
-  # pretrain_network_d: experiments/MSA-ESRraGANx4plus_ip14+4kv3.2gvWgp3ls/models/net_d_xxx000.pth
-
+  # pretrain_network_d: ~
 
   param_key_d: params_ema
   strict_load_d: true
 
-  # resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2/training_states/522040_updated.state
-  # resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2/training_states/791480_updated.state
-  # resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2/training_states/749380_updated.state
-  resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2/training_states/825160.state
-
+  resume_state: ~
+  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix/training_states/126306.state.updated
+  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix/training_states/84204_updated.state
+  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix/training_states/21051.state
 
   # Auto resume from cli just uses last net_g, net_d, and state files. Learning rates
   # are sealed into the state file as are all optimizer schedules.
   # as a result auto_resume will ignore yaml reconfigs on lr and milestones.
 
   # To keep training progress use the specific net_g, net_d without a state file
-  # and make modifications to lr and/or milestones as needed. Iteration count
+  # and mak70k, @119e modifications to lr and/or milestones as needed. Iteration count
   # will be reset to 0 and the optimizers will be reinitialized with new lr and
   # milestones if changed. Name the yaml as a series to help organize
   # tensorboard visuals since the charts are really just off-set continuations
@@ -169,39 +144,42 @@ train:
   ema_decay: 0.999
   optim_g:
     type: Adam
-    lr: !!float 1.0089e-4
+    lr: !!float 1.2505e-4 # 2.501e-4 reset to LR_d x5 @iter 84k
     weight_decay: 0
     betas: [0.5, 0.99]
   optim_d:
     type: Adam
-    lr: !!float 3.363e-5
-    # lr: !!float 5.0445e-5
+    lr: !!float 2.501e-5  # Reduce from 5.002e-5 (LR too high)
     weight_decay: 0
-    betas: [0.0, 0.99]   # beta1=0 disables Adam momentum
+    betas: [0.5, 0.99]   # beta1=0 disables Adam momentum
     # eps: 1e-8
   scheduler:
     type: MultiStepLR
-    # Changes to lr and milestones do not work with resume since the
+    # Changes to lr and milestones do not natively work with resume since the
     # optimizer initial lr sched calc is held in mem and re-saved at each state.
-    # Resume always reads from some state file which superceds yaml values.
+    # Use the update_states.py script to modify state files to update LR
+    # between restarts.
     # PyTorch milestons are epochs, BasicSR are iterations.
-    milestones: [42100, 84200, 122090, 164190, 206290, 311540, 416790, 627290, 749380, 1048290]
-    gamma: 0.9
+    milestones: [84204, 126306]
+    gamma: 0.5
 
   # A dry-run will compute iterations per epoch.
   # Example, ip14+4kv3.2 dataset is 3802 iterations per epoch
   # Example, ip14v33 dataset is 4210 iterations per epoch
-  total_iter: 1347200  # 200 epochs for ip14v33
-  warmup_iter: 42100
+  total_iter: 1403400  # 200 epochs for ip14v33
+  warmup_iter: 7500
+
+  net_d_iters: 5  # Reduced from 10 to 5 @iter 21k,
+  net_d_init_iters: 3000  # Further increase to 3000
 
   # losses
   pixel_opt:
     type: L1Loss
-    loss_weight: 1.0
+    loss_weight: 1.00
     reduction: mean
   grad_opt:
     type: GradientVarianceLoss
-    loss_weight: 1.0
+    loss_weight: 0.45 # Reduce 1.0 to .045 @iter 126k
     reduction: mean
   # perceptual loss (content and stylecompressor losses)
   perceptual_opt:
@@ -215,7 +193,7 @@ train:
       'conv5_4': 1
     vgg_type: vgg19
     use_input_norm: true
-    perceptual_weight: !!float 1.0
+    perceptual_weight: 0.005 # Reduced from 0.014 to .005 @iter 84k
     style_weight: 0
     range_norm: false
     criterion: l1
@@ -223,16 +201,13 @@ train:
   gan_opt:
     type: RelativisticAverageGANLoss
     loss_type: wgan-gp
-    gp_lambda: 5
-    loss_weight: 0.15
-
-  net_d_iters: 1
-  net_d_init_iters: 1
+    gp_lambda: 5  # Reduce from 10 (too constraining)
+    loss_weight: !!float 360.0  # Reduce 500 to 300 @iter 21k, incr to 600 @84k, reduce to 360 @126k
 
 # Uncomment these for validation
 # validation settings
 val:
-  val_freq: 8420
+  val_freq: 7017
   save_img: False
 
   metrics:
@@ -248,7 +223,7 @@ val:
 # logging settings
 logger:
   print_freq: 100
-  save_checkpoint_freq: 8420
+  save_checkpoint_freq: 7017
   use_tb_logger: true
   wandb:
     project: ~
