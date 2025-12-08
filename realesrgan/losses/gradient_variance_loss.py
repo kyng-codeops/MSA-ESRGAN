@@ -1,16 +1,25 @@
 import torch
 import torch.nn as nn
 
+
 class GradientVarianceLoss(nn.Module):
-    def __init__(self, reduction='mean', **kwargs):  # <-- add **kwargs
+    def __init__(self, reduction='mean', loss_weight=1.0, **kwargs):
         super(GradientVarianceLoss, self).__init__()
         self.reduction = reduction
-        # You can optionally store loss_weight if you want to use it inside the loss
+        self.loss_weight = loss_weight
 
     def forward(self, pred, target):
         # Compute gradients (Sobel operator)
-        sobel_x = torch.tensor([[1, 0, -1], [2, 0, -2], [1, 0, -1]], dtype=pred.dtype, device=pred.device).unsqueeze(0).unsqueeze(0)
-        sobel_y = torch.tensor([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=pred.dtype, device=pred.device).unsqueeze(0).unsqueeze(0)
+        sobel_x = torch.tensor(
+            [[1, 0, -1], [2, 0, -2], [1, 0, -1]],
+            dtype=pred.dtype,
+            device=pred.device
+        ).unsqueeze(0).unsqueeze(0)
+        sobel_y = torch.tensor(
+            [[1, 2, 1], [0, 0, 0], [-1, -2, -1]],
+            dtype=pred.dtype,
+            device=pred.device
+        ).unsqueeze(0).unsqueeze(0)
 
         def gradient(img, kernel):
             # Apply to each channel
@@ -30,8 +39,8 @@ class GradientVarianceLoss(nn.Module):
 
         loss = torch.abs(pred_var - target_var)
         if self.reduction == 'mean':
-            return loss.mean()
+            loss = loss.mean()
         elif self.reduction == 'sum':
-            return loss.sum()
-        else:
-            return loss
+            loss = loss.sum()
+
+        return loss * self.loss_weight
