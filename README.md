@@ -16,25 +16,33 @@
 [![Publish-pip](https://github.com/xinntao/Real-ESRGAN/actions/workflows/publish-pip.yml/badge.svg)](https://github.com/xinntao/Real-ESRGAN/blob/master/.github/workflows/publish-pip.yml)
 
 </div>
-MSA-ESRGAN is a forked modification from Real-ESRGAN.  This is a pytorch and BasicSR implementation of the NIH paper published at the
+MSA-ESRGAN is a fork from Real-ESRGAN.  The core changes to the network were in part inspired by the NIH paper published at the
 National Library of Medicine's National Center for Biotechnology Information--with a modification on activation functions.
+Multiple additional changes have been incorporated further improving the resulting model.
 
 MSA stands for Multi-Scale Attention and refers to the discriminator network architecture of the GAN.  This GAN uses the
 exact same generator as ESRGAN, Real-ESRGAN, and others (I believe BSRGAN also uses the same generator).  The new discriminator
-is meant to improve the GAN's ability to focus attention in areas that might or should improve perceptual quality but
-using a combination of Channel Attention and Spatial Attention. From the various versions of the same paper, the authors
-only called for the use or ReLU as the activation function.  However, the first couple rounds of training demonstrated
-the need to use Leaky ReLU.
+is meant to improve the GAN's ability to focus attention in areas that significantly improved perceptual quality but
+using a combination of Channel Attention, Spatial Attention, upgraded GAN loss criterion and over all loss models. 
+From the various versions of the same paper, the authors only called for the use or ReLU as the activation function.  
+However, the first couple rounds of training demonstrated the need to use Leaky ReLU for stability.
 
+There is a WGAN-gp branch which is the most advanced and highest quality producing model. This is a Wasserstein GAN
+upgraded from being a discriminator (discrete) to a critic (relativistic GAN) that implements Gradient-Penalty
+for it's GAN loss criterion.  This results in meaningful loss magnitude outputs (l_g_gan) allowing direct
+WGAN loss weighting adjustments to balance against L1loss, perceptual loss, and a newly added Gradient-Variance loss.
+Using meaninful loss magnitudes allows a trainer to compute accurate loss-mix levels to achieve targeted results.
 
-I became interested in this work while training Real-ESRGAN from the ground up
-on a custom built 4K natural image dataset that included the artistic use of focused foregrounds and blurred backgrounds.
-My goal was to see if a custom data set could teach Real-ESRGAN to maintain more details on images of human faces (i.e. getting
-rid of the airbrushed over smoothing on humans).  With a dataset of nearly 20,000 4K and higher images of mostly people, places,
-and more, I was able to make Real-ESRGAN generate skin textures and skin tone gradients. However, Real-ESRGAN had a tendency
-to attempt sharpening blurred backgrounds and blurring some foregrounds.  This repo is my first functioning MSA (Multi-Scale Attention) discriminator
-modification to Real-ESRGAN (the generators between ESRGAN, Real-ESRGAN, and MSA-ESRGAN are all identical, only the discriminator is changed).  Since this is a work in-progress,
-I will eventually fix-up this repo's documentation.  For now, there will be tons of old references and links and typos.
+Example: L1loss and perceptual loss shape the structure, while WGAN shapes realism, and GV sharpens boundaries averaged-out
+by the L1loss.  I'm not going to post the model I trained, but so far, SSIM values around 0.8891 and PSNR values around 31.91
+have been achieved using a private dataset with over 21,000 4K photos and video-frame stills.
+
+With a dataset of nearly 21,000 4K and higher images of mostly people, places, and more, I was able to make MSA-ESRGAN generate 
+skin textures and skin tone gradients. Real-ESRGAN had a tendency to attempt sharpening blurred backgrounds and blurring some 
+foregrounds.  This repo is a functioning MSA (Multi-Scale Attention) relativistic Wasserstein-GAN with Gradient Penalties.
+
+Since this is a work in-progress, I will eventually fix-up this repo's documentation.  For now, there will be tons of old 
+references and links and typos.
 
 Inferencing this model is identical to Real-ESRGAN so I'm keeping much of that documentation for now.  The training procedures
 are also the same but the MSA discriminator is unique.
