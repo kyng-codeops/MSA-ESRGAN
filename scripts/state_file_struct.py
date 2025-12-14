@@ -4,7 +4,7 @@ Script to inspect the structure of a PyTorch state file,
 focusing on optimizer and scheduler components for debugging the update_state_lrs.py script.
 
 """
-state_file = "experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-gr128-nbl/training_states/231561_updated.state"
+state_file = "experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2/training_states/8420.state"
 state = torch.load(state_file, map_location="cpu")
 
 # Print the top-level keys
@@ -39,11 +39,11 @@ if "schedulers" in state:
             print("\n")
             if "milestones" in elem:
                 print(f"\tScheduler [{idx}]['milestones']:\n\t", elem["milestones"], "\n")
-                print("\tbase_lrs: {}\n\t_step_count: {}\n\tlast_epoch: {}\n".format(
-                    elem["base_lrs"],
-                    elem["_step_count"],
-                    elem["last_epoch"]
-                ))
+                print(f"\tbase_lrs: {elem['base_lrs']}")
+                print(f"\t_last_lr: {elem['_last_lr']}")
+                print(f"\t_step_count: {elem['_step_count']}")
+                print(f"\tlast_epoch: {elem['last_epoch']}")
+                print(f"\tgamma: {elem['gamma']}")
                 print("")
 else:
     print("No 'optimizer' key found in state file.", "\n\n")

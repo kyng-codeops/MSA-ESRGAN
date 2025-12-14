@@ -86,7 +86,7 @@ class UpBlock(nn.Module):
 
 @ARCH_REGISTRY.register()
 class UNetDiscriminator(nn.Module):
-    def __init__(self, num_in_ch=3, num_feat=64, skip_connection=False):
+    def __init__(self, num_in_ch=3, num_feat=64, skip_connection=True):
         super(UNetDiscriminator, self).__init__()
         self.skip_connection = skip_connection
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
@@ -117,18 +117,18 @@ class UNetDiscriminator(nn.Module):
 
         d1 = self.up1(e4)
         if self.skip_connection:
-            d1 = d1 + e3
-        d1 = self.csafm1(d1, e3)
+            # d1 = d1 + e3
+            d1 = self.csafm1(d1, e3)
 
         d2 = self.up2(d1)
         if self.skip_connection:
-            d2 = d2 + e2
-        d2 = self.csafm2(d2, e2)
+            # d2 = d2 + e2
+            d2 = self.csafm2(d2, e2)
 
         d3 = self.up3(d2)
         if self.skip_connection:
-            d3 = d3 + e1
-        d3 = self.csafm3(d3, e1)
+            # d3 = d3 + e1
+            d3 = self.csafm3(d3, e1)
 
         # Fixed: Apply final_conv1 once, then final_conv2 without activation
         out = self.lrelu(self.final_conv1(d3))
