@@ -1,6 +1,7 @@
 import argparse
 import cv2
 import glob
+import numpy as np
 import os
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from basicsr.utils.download_util import load_file_from_url
@@ -51,6 +52,8 @@ def main():
         help='Image extension. Options: auto | jpg | png, auto means using the same extension as inputs')
     parser.add_argument(
         '-g', '--gpu-id', type=int, default=None, help='gpu device to use (default=None) can be 0,1,2 for multi-gpu')
+    parser.add_argument(
+        '--bit16', action='store_true', help='Save output in 16-bit color depth (PNG format only)')
 
     args = parser.parse_args()
 
@@ -141,10 +144,11 @@ def main():
             img_mode = None
 
         try:
+            output_bit_depth = 16 if args.bit16 else None
             if args.face_enhance:
                 _, _, output = face_enhancer.enhance(img, has_aligned=False, only_center_face=False, paste_back=True)
             else:
-                output, _ = upsampler.enhance(img, outscale=args.outscale)
+                output, _ = upsampler.enhance(img, outscale=args.outscale, output_bit_depth=output_bit_depth)
         except RuntimeError as error:
             print('Error', error)
             print('If you encounter CUDA out of memory, try to set --tile with a smaller number.')
@@ -155,10 +159,13 @@ def main():
                 extension = args.ext
             if img_mode == 'RGBA':  # RGBA images should be saved in png format
                 extension = 'png'
+            if args.bit16:  # 16-bit output requires PNG format
+                extension = 'png'
             if args.suffix == '':
                 save_path = os.path.join(args.output, f'{imgname}.{extension}')
             else:
                 save_path = os.path.join(args.output, f'{imgname}_{args.suffix}.{extension}')
+
             cv2.imwrite(save_path, output)
 
 
