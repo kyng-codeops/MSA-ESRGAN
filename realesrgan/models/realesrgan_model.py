@@ -144,6 +144,24 @@ class RealESRGANModel(SRGANModel):
                     clip=True,
                     rounds=False)
 
+            # ----------------------- Fake upscale degradation (optional) ----------------------- #
+            # Simulates cheap SD-to-HD stretching (e.g., 480->720/1080, 320->480)
+            # This degrades by downscaling then upscaling with cheap interpolation
+            fake_upscale_prob = self.opt.get('fake_upscale_prob', 0)
+            if fake_upscale_prob > 0 and np.random.uniform() < fake_upscale_prob:
+                fake_upscale_range = self.opt.get('fake_upscale_range', [1.5, 2.25])
+                fake_upscale_modes = self.opt.get('fake_upscale_modes', ['bilinear', 'bicubic'])
+                # Random upscale factor in range
+                upscale_factor = np.random.uniform(fake_upscale_range[0], fake_upscale_range[1])
+                current_h, current_w = out.size()[2:4]
+                # Downsample first (simulate the original SD source)
+                down_h, down_w = int(current_h / upscale_factor), int(current_w / upscale_factor)
+                if down_h > 4 and down_w > 4:  # ensure minimum size
+                    out = F.interpolate(out, size=(down_h, down_w), mode='area')
+                    # Cheap upscale back (simulate the fake HD stretch)
+                    fake_mode = random.choice(fake_upscale_modes)
+                    out = F.interpolate(out, size=(current_h, current_w), mode=fake_mode)
+
             # JPEG compression + the final sinc filter
             # We also need to resize images to desired sizes. We group [resize back + sinc filter] together
             # as one operation.
