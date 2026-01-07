@@ -14,34 +14,34 @@ gan_gt_usm: False
 # the first degradation process
 resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
 resize_range: [0.15, 1.5]
-gaussian_noise_prob: 0.65  # @1309k increased from 0.5 for older sensor simulation
+gaussian_noise_prob: 0.65  # increased from 0.5 for older sensor simulation
 # gaussian_noise_prob: 0.5  # original @0k
-noise_range: [3, 40]  # @1309k increased from [1, 30] for older sensor simulation
+noise_range: [1, 40]  # widened: low end for modern sensors, high end for older sensors
 # noise_range: [1, 30]  # original @0k
-poisson_scale_range: [0.2, 4.5]  # @1309k increased from [0.05, 3] for older sensor shot noise
+poisson_scale_range: [0.05, 4.5]  # widened: low end for modern sensors, high end for older shot noise
 # poisson_scale_range: [0.05, 3]  # original @0k
-gray_noise_prob: 0.5  # @1309k increased from 0.4 for older sensor simulation
-# gray_noise_prob: 0.4  # original @0k
-jpeg_range: [15, 75]    # Lower both values from [30, 95] for more compression artifacts
+gray_noise_prob: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range: [15, 95]  # widened: low end for heavy compression, high end for modern quality
 
 # the second degradation process
 second_blur_prob: 0.9    # Increase from 0.8 to 0.9
 resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
 resize_range2: [0.3, 1.2]
-gaussian_noise_prob2: 0.6  # @1309k increased from 0.5 for older sensor simulation
+gaussian_noise_prob2: 0.6  # increased from 0.5 for older sensor simulation
 # gaussian_noise_prob2: 0.5  # original @0k
-noise_range2: [2, 35]  # @1309k increased from [1, 25] for older sensor simulation
+noise_range2: [1, 35]  # widened: low end for modern sensors, high end for older sensors
 # noise_range2: [1, 25]  # original @0k
-poisson_scale_range2: [0.15, 4]  # @1309k increased from [0.05, 2.5] for older sensor shot noise
+poisson_scale_range2: [0.05, 4]  # widened: low end for modern sensors, high end for older shot noise
 # poisson_scale_range2: [0.05, 2.5]  # original @0k
-gray_noise_prob2: 0.5  # @1309k increased from 0.4 for older sensor simulation
+gray_noise_prob2: 0.5  # increased from 0.4 for older sensor simulation
 # gray_noise_prob2: 0.4  # original @0k
-jpeg_range2: [15, 75]    # Lower both values from [30, 95]
+jpeg_range2: [15, 95]  # widened: low end for heavy compression, high end for modern quality
 
 # fake upscale degradation - simulates cheap SD-to-HD stretching (e.g., 480->720/1080, 320->480)
 fake_upscale_prob: 0.15  # probability to apply fake upscale degradation
 fake_upscale_range: [1.5, 2.25]  # upscale factor range (1.5x = 480->720, 2.25x = 480->1080)
-fake_upscale_modes: ['bilinear', 'bicubic']  # cheap interpolation methods
+fake_upscale_modes: ['bilinear', 'bicubic', 'nearest']  # cheap interpolation methods
+fake_upscale_mode_weights: [0.45, 0.45, 0.1]  # bilinear/bicubic common, nearest rare but exists
 
 # combing artifact degradation - simulates poor deinterlacing with residual comb lines
 combing_prob: 0.1  # probability to apply combing artifacts (keep low, ~10%)
