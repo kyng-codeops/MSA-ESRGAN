@@ -1,5 +1,5 @@
 # general settings
-name: MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2
+name: MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2.1
 model_type: RealESRGANModel
 scale: 4
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
@@ -14,20 +14,28 @@ gan_gt_usm: False
 # the first degradation process
 resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
 resize_range: [0.15, 1.5]
-gaussian_noise_prob: 0.5
-noise_range: [1, 30]
-poisson_scale_range: [0.05, 3]
-gray_noise_prob: 0.4
+gaussian_noise_prob: 0.65  # @1309k increased from 0.5 for older sensor simulation
+# gaussian_noise_prob: 0.5  # original @0k
+noise_range: [3, 40]  # @1309k increased from [1, 30] for older sensor simulation
+# noise_range: [1, 30]  # original @0k
+poisson_scale_range: [0.2, 4.5]  # @1309k increased from [0.05, 3] for older sensor shot noise
+# poisson_scale_range: [0.05, 3]  # original @0k
+gray_noise_prob: 0.5  # @1309k increased from 0.4 for older sensor simulation
+# gray_noise_prob: 0.4  # original @0k
 jpeg_range: [15, 75]    # Lower both values from [30, 95] for more compression artifacts
 
 # the second degradation process
 second_blur_prob: 0.9    # Increase from 0.8 to 0.9
 resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
 resize_range2: [0.3, 1.2]
-gaussian_noise_prob2: 0.5
-noise_range2: [1, 25]
-poisson_scale_range2: [0.05, 2.5]
-gray_noise_prob2: 0.4
+gaussian_noise_prob2: 0.6  # @1309k increased from 0.5 for older sensor simulation
+# gaussian_noise_prob2: 0.5  # original @0k
+noise_range2: [2, 35]  # @1309k increased from [1, 25] for older sensor simulation
+# noise_range2: [1, 25]  # original @0k
+poisson_scale_range2: [0.15, 4]  # @1309k increased from [0.05, 2.5] for older sensor shot noise
+# poisson_scale_range2: [0.05, 2.5]  # original @0k
+gray_noise_prob2: 0.5  # @1309k increased from 0.4 for older sensor simulation
+# gray_noise_prob2: 0.4  # original @0k
 jpeg_range2: [15, 75]    # Lower both values from [30, 95]
 
 gt_size: 256
@@ -81,6 +89,7 @@ datasets:
     type: PairedImageDataset
     dataroot_gt: datasets/ds_root/validation/hq2
     dataroot_lq: datasets/ds_root/validation/lq2_786k
+    # dataroot_lq: datasets/ds_root/validation/lq2_auto_85
     io_backend:
       type: disk
 
@@ -114,9 +123,16 @@ path:
   param_key_d: params_ema
   strict_load_d: true
 
-  resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2/training_states/580980.state.updated
-  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2/training_states/357850.state.updated
-  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2/training_states/223130.state.updated
+  resume_state: experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2.1/training_states/1309310.state
+  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2.1/training_states/555720.state.updated
+  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2.1/training_states/492570.state.updated
+  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2.1/training_states/471520.state.updated
+  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2.1/training_states/421000.state.updated
+  # 336800.state.updated
+  # 252600.state.updated
+  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2.1/training_states/252600.state
+  # 244180.state.updated
+  # experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2.1/training_states/210500.state.updated
 
   # Auto resume from cli just uses last net_g, net_d, and state files. Learning rates
   # are sealed into the state file as are all optimizer schedules.
@@ -143,12 +159,26 @@ train:
   ema_decay: 0.999
   optim_g:
     type: Adam
-    lr: !!float 1.2505e-4
+    # lr: 1.250e-4 # Start
+    # lr: 1.250e-4 # @167k iters
+    # lr: 6.2500e-5 # @210k iters
+    # lr: 3.1250e-5 # @421k iters
+    lr: 1.5625e-05 # @555k iters
     weight_decay: 0
     betas: [0.5, 0.99]
+
   optim_d:
     type: Adam
-    lr: !!float 2.501e-5  # Reduce from 5.002e-5 (LR too high)
+    # lr: 2.500e-5 # Start at 1:5
+    # lr: 5.000e-5 # @167k iters 2:5
+    # lr: 3.750e-5 # @210k iters 3:5
+    # lr: 5.000e-5 # @244k iters 4:5
+    # lr: 6.2600e-5 # @252k iters even-LRs *typo but close enough to even
+    # lr: 7.5000e-5 # @336k iters 1.25x LRg -> LRd
+    # lr: 5.21875e-5 # @421k iters 1.67x LRg -> LRd
+    # lr: 7.8125e-05 # @471k iters 2.5x LRg -> LRd
+    # lr: 1.5625e-04 # @492k iters 5x LRg -> LRd
+    lr: 7.8125e-05 # @555k iters 5x LRg -> LRd
     weight_decay: 0
     betas: [0.5, 0.99]   # beta1=0 disables Adam momentum
     # eps: 1e-8
@@ -159,16 +189,16 @@ train:
     # Use the update_states.py script to modify state files to update LR
     # between restarts.
     # PyTorch milestons are epochs, BasicSR are iterations.
-    milestones: [223131, 311541, 345221, 357851, 395741, 433631, 471521, 509411, 547301]
-    # @iter 471 milestone LR crosses from 1.954e-6 to 0.977e-6
-    # There are still some finer textures learned between iter 492k and 580k
-    # Maybe 547301 should be the last LR cut?
+    milestones: [842000]
     gamma: 0.5
 
   # A dry-run will compute iterations per epoch.
   # Example, ip14+4kv3.2 dataset is 3802 iterations per epoch
   # Example, ip14v33 dataset is 4210 iterations per epoch
-  total_iter: 842000  # 200 epochs for ip14v33 dataset
+
+  # total_iter: 842000  # 200 epochs for ip14v33 dataset
+  # total_iter: 1263000  # 300 epochs for ip14v33 dataset
+  total_iter: 1684000  # 400 epochs for ip14v33 dataset
   warmup_iter: 4210
 
   net_d_iters: 10  # Run at 10 or higher for critic to compete
@@ -194,8 +224,14 @@ train:
     reduction: mean
   grad_opt:
     type: GradientVarianceLoss
-    loss_weight: 0.200 # from 0.01, to 0.1 @223k (.018 inbetween), to 0.3 @416k, 0.4 @442k
-    # drop to 0.2 @416k (model is searching too hard at 0.3)
+    # loss_weight: 0.01 # from 0.01, progressively increase until at 0.2
+    # loss_weight: 0.05 # @167k iters (good results @244k iters)
+    # loss_weight: 0.055 # increased @244k iters (inspected 2005_040821.mp4)
+    # loss_weight: 0.069 # increased @252k iters
+    # loss_weight: 0.086 # increased @336k iters
+    # loss_weight: 0.129 # @471k iters
+    # loss_weight: 0.2 # @492k iters
+    loss_weight: 0.160 # @1263k iters
     reduction: mean
   # perceptual loss (content and stylecompressor losses)
   perceptual_opt:
@@ -209,7 +245,7 @@ train:
       'conv5_4': 1
     vgg_type: vgg19
     use_input_norm: true
-    perceptual_weight: 0.0065 # .005 to .0065 @277k
+    perceptual_weight: 0.0065 # Old run .005 to .0065 @277k, this run .0065 @167k
     style_weight: 0
     range_norm: false
     criterion: l1
@@ -217,7 +253,7 @@ train:
   gan_opt:
     type: RelativisticAverageGANLoss
     loss_type: wgan-gp
-    gp_lambda: 10.0 # incr from 10 to 12 @iter 214k, 15.0 @223k
+    gp_lambda: 10.0
     loss_weight: !!float 430.0
 
 # Uncomment these for validation
