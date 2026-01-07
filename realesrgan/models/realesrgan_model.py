@@ -191,11 +191,18 @@ class RealESRGANModel(SRGANModel):
                 if combing_blend > 0 and h > 2:
                     # Create a blended version where odd lines blend with even neighbors
                     out_blended = out_combed.clone()
-                    # Blend odd lines with their even neighbors (simple average)
-                    out_blended[:, :, 1::2, :] = (
-                        (1 - combing_blend) * out_combed[:, :, 1::2, :] +
-                        combing_blend * 0.5 * (out_combed[:, :, 0:-1:2, :] + out_combed[:, :, 2::2, :])
-                    )[:, :, :out_blended[:, :, 1::2, :].size(2), :]
+                    # Calculate how many odd lines can be safely blended (have both above and below neighbors)
+                    # Odd lines: 1, 3, 5, ... - the last odd line may not have a below neighbor
+                    n_blend = (h - 1) // 2  # number of odd lines with both neighbors
+                    if n_blend > 0:
+                        end_idx = 2 * n_blend  # exclusive end index for slicing
+                        # odd lines: 1, 3, ..., end_idx-1
+                        # above neighbors: 0, 2, ..., end_idx-2
+                        # below neighbors: 2, 4, ..., end_idx
+                        out_blended[:, :, 1:end_idx:2, :] = (
+                            (1 - combing_blend) * out_combed[:, :, 1:end_idx:2, :] +
+                            combing_blend * 0.5 * (out_combed[:, :, 0:end_idx-1:2, :] + out_combed[:, :, 2:end_idx+1:2, :])
+                        )
                     out = out_blended
                 else:
                     out = out_combed
