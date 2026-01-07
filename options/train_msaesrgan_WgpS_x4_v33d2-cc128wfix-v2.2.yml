@@ -43,6 +43,11 @@ fake_upscale_prob: 0.15  # probability to apply fake upscale degradation
 fake_upscale_range: [1.5, 2.25]  # upscale factor range (1.5x = 480->720, 2.25x = 480->1080)
 fake_upscale_modes: ['bilinear', 'bicubic']  # cheap interpolation methods
 
+# combing artifact degradation - simulates poor deinterlacing with residual comb lines
+combing_prob: 0.1  # probability to apply combing artifacts (keep low, ~10%)
+combing_strength: [0.5, 2.0]  # horizontal pixel shift range for odd scanlines
+combing_blend: 0.3  # blend factor with adjacent lines (0 = pure shift, higher = more ghosting)
+
 gt_size: 256
 queue_size: 180
 

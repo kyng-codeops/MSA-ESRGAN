@@ -162,6 +162,43 @@ class RealESRGANModel(SRGANModel):
                     fake_mode = random.choice(fake_upscale_modes)
                     out = F.interpolate(out, size=(current_h, current_w), mode=fake_mode)
 
+            # ----------------------- Combing artifact degradation (optional) ----------------------- #
+            # Simulates poor deinterlacing where alternating scanlines show slight displacement
+            combing_prob = self.opt.get('combing_prob', 0)
+            if combing_prob > 0 and np.random.uniform() < combing_prob:
+                combing_strength = self.opt.get('combing_strength', [0.5, 2.0])  # pixel shift range
+                combing_blend = self.opt.get('combing_blend', 0.3)  # blend factor with adjacent lines
+                
+                b, c, h, w = out.size()
+                shift_pixels = np.random.uniform(combing_strength[0], combing_strength[1])
+                # Normalize shift to [-1, 1] range for grid_sample
+                shift_norm = (shift_pixels / w) * 2
+                
+                # Create base grid
+                theta = torch.tensor([[1, 0, 0], [0, 1, 0]], dtype=out.dtype, device=out.device)
+                theta = theta.unsqueeze(0).expand(b, -1, -1)
+                grid = F.affine_grid(theta, out.size(), align_corners=False)
+                
+                # Shift odd scanlines horizontally
+                grid_shifted = grid.clone()
+                grid_shifted[:, 1::2, :, 0] += shift_norm  # shift x coordinate of odd rows
+                
+                # Apply the shifted sampling
+                out_combed = F.grid_sample(out, grid_shifted, mode='bilinear', padding_mode='border', align_corners=False)
+                
+                # Optional: blend with vertically adjacent lines to simulate field blending artifacts
+                if combing_blend > 0 and h > 2:
+                    # Create a blended version where odd lines blend with even neighbors
+                    out_blended = out_combed.clone()
+                    # Blend odd lines with their even neighbors (simple average)
+                    out_blended[:, :, 1::2, :] = (
+                        (1 - combing_blend) * out_combed[:, :, 1::2, :] +
+                        combing_blend * 0.5 * (out_combed[:, :, 0:-1:2, :] + out_combed[:, :, 2::2, :])
+                    )[:, :, :out_blended[:, :, 1::2, :].size(2), :]
+                    out = out_blended
+                else:
+                    out = out_combed
+
             # JPEG compression + the final sinc filter
             # We also need to resize images to desired sizes. We group [resize back + sinc filter] together
             # as one operation.
