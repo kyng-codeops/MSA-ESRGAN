@@ -138,6 +138,68 @@ class RealESRNetModel(SRModel):
                     clip=True,
                     rounds=False)
 
+            # ----------------------- Fake upscale degradation (optional) ----------------------- #
+            # Simulates cheap SD-to-HD stretching (e.g., 480->720/1080, 320->480)
+            # This degrades by downscaling then upscaling with cheap interpolation
+            fake_upscale_prob = self.opt.get('fake_upscale_prob', 0)
+            if fake_upscale_prob > 0 and np.random.uniform() < fake_upscale_prob:
+                fake_upscale_range = self.opt.get('fake_upscale_range', [1.5, 2.25])
+                fake_upscale_modes = self.opt.get('fake_upscale_modes', ['bilinear', 'bicubic', 'nearest'])
+                fake_upscale_mode_weights = self.opt.get('fake_upscale_mode_weights', None)
+                # Random upscale factor in range
+                upscale_factor = np.random.uniform(fake_upscale_range[0], fake_upscale_range[1])
+                current_h, current_w = out.size()[2:4]
+                # Downsample first (simulate the original SD source)
+                down_h, down_w = int(current_h / upscale_factor), int(current_w / upscale_factor)
+                if down_h > 4 and down_w > 4:  # ensure minimum size
+                    out = F.interpolate(out, size=(down_h, down_w), mode='area')
+                    # Cheap upscale back (simulate the fake HD stretch)
+                    fake_mode = random.choices(fake_upscale_modes, weights=fake_upscale_mode_weights)[0]
+                    out = F.interpolate(out, size=(current_h, current_w), mode=fake_mode)
+
+            # ----------------------- Combing artifact degradation (optional) ----------------------- #
+            # Simulates poor deinterlacing where alternating scanlines show slight displacement
+            combing_prob = self.opt.get('combing_prob', 0)
+            if combing_prob > 0 and np.random.uniform() < combing_prob:
+                combing_strength = self.opt.get('combing_strength', [0.5, 2.0])  # pixel shift range
+                combing_blend = self.opt.get('combing_blend', 0.3)  # blend factor with adjacent lines
+
+                b, c, h, w = out.size()
+                shift_pixels = np.random.uniform(combing_strength[0], combing_strength[1])
+                # Normalize shift to [-1, 1] range for grid_sample
+                shift_norm = (shift_pixels / w) * 2
+
+                # Create base grid
+                theta = torch.tensor([[1, 0, 0], [0, 1, 0]], dtype=out.dtype, device=out.device)
+                theta = theta.unsqueeze(0).expand(b, -1, -1)
+                grid = F.affine_grid(theta, out.size(), align_corners=False)
+
+                # Shift odd scanlines horizontally
+                grid_shifted = grid.clone()
+                grid_shifted[:, 1::2, :, 0] += shift_norm  # shift x coordinate of odd rows
+
+                # Apply the shifted sampling
+                out_combed = F.grid_sample(out, grid_shifted, mode='bilinear', padding_mode='border', align_corners=False)
+
+                # Optional: blend with vertically adjacent lines to simulate field blending artifacts
+                if combing_blend > 0 and h > 2:
+                    # Create a blended version where odd lines blend with even neighbors
+                    out_blended = out_combed.clone()
+                    # Calculate how many odd lines can be safely blended (have both above and below neighbors)
+                    n_blend = (h - 1) // 2  # number of odd lines with both neighbors
+                    if n_blend > 0:
+                        end_idx = 2 * n_blend  # exclusive end index for slicing
+                        # odd lines: 1, 3, ..., end_idx-1
+                        # above neighbors: 0, 2, ..., end_idx-2
+                        # below neighbors: 2, 4, ..., end_idx
+                        out_blended[:, :, 1:end_idx:2, :] = (
+                            (1 - combing_blend) * out_combed[:, :, 1:end_idx:2, :] +
+                            combing_blend * 0.5 * (out_combed[:, :, 0:end_idx-1:2, :] + out_combed[:, :, 2:end_idx+1:2, :])
+                        )
+                    out = out_blended
+                else:
+                    out = out_combed
+
             # JPEG compression + the final sinc filter
             # We also need to resize images to desired sizes. We group [resize back + sinc filter] together
             # as one operation.
