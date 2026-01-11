@@ -1,5 +1,5 @@
 # general settings
-name: MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2.2
+name: MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v3
 model_type: RealESRGANModel
 scale: 4
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
@@ -124,7 +124,11 @@ path:
   # this BasicSR framework will just use the hightest iteration cound net_g, net_d, and state files
 
   # pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v3_g_2950000.pth  # Real-ESRNet ip14+4kv3 using jpg dmg [15, 95]
-  pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v33_320gt_dmgV2_2995K.pth
+  # pretrain_network_g: experiments/pretrained_models/ESRnet_ip14v33_320gt_dmgV2_2995K.pth
+
+  # ESRNet finetuned with new degradation pipeline
+  pretrain_network_g: experiments/ESRNet_finetune_newdeg/models/net_g_421000.pth
+
   param_key_g: params_ema
   strict_load_g: true
 
@@ -160,15 +164,15 @@ train:
   ema_decay: 0.999
   optim_g:
     type: Adam
-    lr: 1.250e-4 # Start
+    lr: 2.000e-5
     weight_decay: 0
-    betas: [0.5, 0.99]
+    betas: [0.0, 0.99]
 
   optim_d:
     type: Adam
-    lr: 6.250e-4 # Start at 5x the generator lr
+    lr: 1.000e-4 # Start at 5x the generator lr
     weight_decay: 0
-    betas: [0.5, 0.99]   # beta1=0 disables Adam momentum
+    betas: [0.0, 0.99]   # beta1=0 disables Adam momentum
     # eps: 1e-8
   scheduler:
     type: MultiStepLR
@@ -210,7 +214,7 @@ train:
     reduction: mean
   grad_opt:
     type: GradientVarianceLoss
-    loss_weight: 0.130 # .2 and .16 in prior run were too strong, .1 seemed too weak
+    loss_weight: 0.005 # very nonlinear @.125 get .14 to .35, @.005 get 4.7e-3
     reduction: mean
   # perceptual loss (content and stylecompressor losses)
   perceptual_opt:
@@ -224,7 +228,7 @@ train:
       'conv5_4': 1
     vgg_type: vgg19
     use_input_norm: true
-    perceptual_weight: 0.0065 # Old run .005 to .0065 @277k, this run .0065 @167k
+    perceptual_weight: 0.007 # Old run .005 to .0065 @277k, this run .0065 @167k
     style_weight: 0
     range_norm: false
     criterion: l1
@@ -233,7 +237,7 @@ train:
     type: RelativisticAverageGANLoss
     loss_type: wgan-gp
     gp_lambda: 5.0
-    loss_weight: !!float 430.0
+    loss_weight: !!float 94.0
 
 # Uncomment these for validation
 # validation settings

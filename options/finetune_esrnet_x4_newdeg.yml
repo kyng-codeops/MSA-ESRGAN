@@ -127,7 +127,7 @@ train:
     gamma: 0.5
 
   # Fine-tune for 300k iterations (~142 epochs with ip14v33 dataset at 2105 iter/epoch with batch=10)
-  total_iter: 300000
+  total_iter: 421000
   warmup_iter: -1  # No warmup needed for fine-tuning (model already well-trained)
 
   # losses - L1 only (same as original ESRNet training)
@@ -138,7 +138,7 @@ train:
 
 # validation settings
 val:
-  val_freq: 2105  # Validate every epoch (ip14v33 = 2105 iter/epoch with batch=10)
+  val_freq: 4210  # Validate every 2 epochs (faster training)
   save_img: False
 
   metrics:
