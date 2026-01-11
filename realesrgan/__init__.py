@@ -6,3 +6,4 @@ from .utils import *
 from .version import *
 
 from .losses import gradient_variance_loss
+from .metrics import calculate_lpips

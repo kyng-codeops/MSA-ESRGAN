@@ -1,0 +1,59 @@
+# Example config showing LPIPS loss usage
+# Replace perceptual_opt and grad_opt with lpips_opt
+#
+# LPIPS advantages:
+# - Trained on human perceptual judgments (better than raw VGG features)
+# - Preserves textures and details without over-smoothing
+# - No scratchy line artifacts like GV loss
+# - Single loss replaces both perceptual + gradient losses
+
+train:
+  # ... (other training settings)
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.00
+    reduction: mean
+
+  # LPIPS perceptual loss - replaces perceptual_opt + grad_opt
+  lpips_opt:
+    type: LPIPSLoss
+    loss_weight: 0.5  # Start here, tune between 0.1-1.0
+    net_type: vgg  # Currently only 'vgg' supported
+    use_dropout: true  # Dropout in channel weighting (recommended)
+    reduction: mean
+    # pretrained_path: path/to/lpips_weights.pth  # Optional: use pretrained LPIPS weights
+
+  # gan loss (unchanged)
+  gan_opt:
+    type: RelativisticAverageGANLoss
+    loss_type: wgan-gp
+    gp_lambda: 5.0
+    loss_weight: !!float 94.0
+
+
+# ============================================================================
+# TUNING GUIDELINES:
+# ============================================================================
+#
+# lpips_opt.loss_weight tuning:
+#   Start: 0.5
+#   Too smooth: Decrease to 0.2-0.3
+#   Not enough detail preservation: Increase to 0.7-1.0
+#   LPIPS values are typically 0.01-0.1, so loss_weight scales to ~0.005-0.1 range
+#
+# Compared to your current settings:
+#   perceptual_weight: 0.007  -->  lpips loss_weight: ~0.3-0.7 (stronger signal)
+#   grad_opt loss_weight: 0.02125  -->  (removed, LPIPS handles edge/detail preservation)
+#
+# Benefits:
+#   - Single loss instead of two
+#   - Better detail preservation than VGG perceptual
+#   - No scratchy artifacts from GV loss
+#   - Cleaner borders (GV computed variance which affected edges)
+#
+# Optional: Download pretrained LPIPS weights for better initialization
+#   Without: Uses VGG features + randomly initialized channel weights (will train)
+#   With: Uses pretrained perceptual weights from LPIPS paper (better starting point)
+#   Download from: https://github.com/richzhang/PerceptualSimilarity

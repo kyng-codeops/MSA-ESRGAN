@@ -12,6 +12,51 @@ from torch.nn import functional as F
 from basicsr.losses import build_loss
 
 
+def compute_gradient_penalty(discriminator, real_data, fake_data, weight=10.0):
+    """Compute gradient penalty for WGAN-GP with proper device handling.
+
+    Args:
+        discriminator: The discriminator network
+        real_data: Real images tensor (on GPU)
+        fake_data: Fake images tensor (on GPU)
+        weight: Gradient penalty weight (lambda)
+
+    Returns:
+        Gradient penalty loss value
+    """
+    batch_size = real_data.size(0)
+    device = real_data.device
+
+    # Generate random interpolation weight on the same device as real_data
+    alpha = torch.rand(batch_size, 1, 1, 1, device=device, dtype=real_data.dtype)
+
+    # Create interpolated images
+    interpolates = alpha * real_data + (1.0 - alpha) * fake_data
+    interpolates.requires_grad_(True)
+
+    # Get discriminator output for interpolated images
+    disc_interpolates = discriminator(interpolates)
+
+    # Compute gradients with respect to interpolated images
+    gradients = torch.autograd.grad(
+        outputs=disc_interpolates,
+        inputs=interpolates,
+        grad_outputs=torch.ones_like(disc_interpolates),
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True
+    )[0]
+
+    # Flatten and compute gradient norm
+    gradients = gradients.view(batch_size, -1)
+    gradient_norm = gradients.norm(2, dim=1)
+
+    # Gradient penalty: (||grad|| - 1)^2
+    gradient_penalty = weight * torch.mean((gradient_norm - 1.0) ** 2)
+
+    return gradient_penalty
+
+
 @MODEL_REGISTRY.register()
 class RealESRGANModel(SRGANModel):
     """RealESRGAN Model for Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data.
@@ -33,6 +78,12 @@ class RealESRGANModel(SRGANModel):
             self.cri_grad = build_loss(train_opt['grad_opt']).to(self.device)
         else:
             self.cri_grad = None
+
+        # Initialize LPIPS loss
+        if train_opt.get('lpips_opt'):
+            self.cri_lpips = build_loss(train_opt['lpips_opt']).to(self.device)
+        else:
+            self.cri_lpips = None
 
     @torch.no_grad()
     def _dequeue_and_enqueue(self):
@@ -300,10 +351,25 @@ class RealESRGANModel(SRGANModel):
                 if l_g_style is not None:
                     l_g_total += l_g_style
                     loss_dict['l_g_style'] = l_g_style
+            # LPIPS loss
+            if self.cri_lpips:
+                l_g_lpips = self.cri_lpips(self.output, percep_gt)
+                l_g_total += l_g_lpips
+                loss_dict['l_g_lpips'] = l_g_lpips
             # gan loss
             fake_g_pred = self.net_d(self.output)
-            real_d_pred = self.net_d(gan_gt)
-            l_g_gan = self.cri_gan(real_d_pred, fake_g_pred, is_disc=False)
+
+            # Check if using relativistic loss
+            is_relativistic = hasattr(self.cri_gan, '__class__') and 'Relativistic' in self.cri_gan.__class__.__name__
+
+            if is_relativistic:
+                # Relativistic loss requires both real and fake predictions
+                real_d_pred = self.net_d(gan_gt)
+                l_g_gan = self.cri_gan(real_d_pred, fake_g_pred, is_disc=False)
+            else:
+                # Non-relativistic: generator wants fake predictions to be classified as real
+                l_g_gan = self.cri_gan(fake_g_pred, True, is_disc=False)
+
             l_g_total += l_g_gan
             loss_dict['l_g_gan'] = l_g_gan
 
@@ -316,13 +382,33 @@ class RealESRGANModel(SRGANModel):
 
         self.optimizer_d.zero_grad()
 
-        # Discriminator loss (relativistic)
+        # Discriminator loss
         real_d_pred = self.net_d(gan_gt)
         fake_d_pred = self.net_d(self.output.detach().clone())
-        l_d_gan = self.cri_gan(
-            real_d_pred, fake_d_pred, is_disc=True,
-            real_img=gan_gt, fake_img=self.output.detach().clone(), net_d=self.net_d
-        )
+
+        # Check if using relativistic loss (which handles GP internally)
+        is_relativistic = hasattr(self.cri_gan, '__class__') and 'Relativistic' in self.cri_gan.__class__.__name__
+
+        if is_relativistic:
+            # Relativistic loss handles GP internally
+            l_d_gan = self.cri_gan(
+                real_d_pred, fake_d_pred, is_disc=True,
+                real_img=gan_gt, fake_img=self.output.detach().clone(), net_d=self.net_d
+            )
+        else:
+            # Non-relativistic: compute base loss + GP separately
+            l_d_gan = self.cri_gan(real_d_pred, True) + self.cri_gan(fake_d_pred, False)
+
+            # Add gradient penalty for WGAN-GP
+            gp_lambda = self.opt['train'].get('gp_lambda', 10.0)
+            if gp_lambda > 0:
+                gp = compute_gradient_penalty(
+                    self.net_d, gan_gt, self.output.detach().clone(),
+                    weight=gp_lambda
+                )
+                l_d_gan = l_d_gan + gp
+                loss_dict['l_d_gp'] = gp
+
         loss_dict['l_d_gan'] = l_d_gan
         loss_dict['out_d_real'] = torch.mean(real_d_pred.detach())
         loss_dict['out_d_fake'] = torch.mean(fake_d_pred.detach())
