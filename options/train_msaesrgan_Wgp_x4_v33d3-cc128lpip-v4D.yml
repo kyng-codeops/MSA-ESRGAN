@@ -1,0 +1,261 @@
+# general settings
+name: MSA-ESRGAN-Wgp_x4_ip14v33-d3-cc128lpip-v4D
+model_type: RealESRGANModel
+scale: 4
+num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
+manual_seed: 0
+
+# ----------------- options for synthesizing training data in RealESRGANModel ----------------- #
+# USM the ground-truth
+l1_gt_usm: True
+percep_gt_usm: False  # CRITICAL FIX: LPIPS should compare to unsharpened GT
+gan_gt_usm: False
+
+# the first degradation process
+resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
+resize_range: [0.15, 1.5]
+gaussian_noise_prob: 0.65  # increased from 0.5 for older sensor simulation
+# gaussian_noise_prob: 0.5  # original @0k
+noise_range: [1, 40]  # widened: low end for modern sensors, high end for older sensors
+# noise_range: [1, 30]  # original @0k
+poisson_scale_range: [0.05, 4.5]  # widened: low end for modern sensors, high end for older shot noise
+# poisson_scale_range: [0.05, 3]  # original @0k
+gray_noise_prob: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range: [15, 95]  # widened: low end for heavy compression, high end for modern quality
+
+# the second degradation process
+second_blur_prob: 0.9    # Increase from 0.8 to 0.9
+resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
+resize_range2: [0.3, 1.2]
+gaussian_noise_prob2: 0.6  # increased from 0.5 for older sensor simulation
+# gaussian_noise_prob2: 0.5  # original @0k
+noise_range2: [1, 35]  # widened: low end for modern sensors, high end for older sensors
+# noise_range2: [1, 25]  # original @0k
+poisson_scale_range2: [0.05, 4]  # widened: low end for modern sensors, high end for older shot noise
+# poisson_scale_range2: [0.05, 2.5]  # original @0k
+gray_noise_prob2: 0.5  # increased from 0.4 for older sensor simulation
+# gray_noise_prob2: 0.4  # original @0k
+jpeg_range2: [15, 95]  # widened: low end for heavy compression, high end for modern quality
+
+# fake upscale degradation - simulates cheap SD-to-HD stretching (e.g., 480->720/1080, 320->480)
+fake_upscale_prob: 0.15  # probability to apply fake upscale degradation
+fake_upscale_range: [1.5, 2.25]  # upscale factor range (1.5x = 480->720, 2.25x = 480->1080)
+fake_upscale_modes: ['bilinear', 'bicubic', 'nearest']  # cheap interpolation methods
+fake_upscale_mode_weights: [0.45, 0.45, 0.1]  # bilinear/bicubic common, nearest rare but exists
+
+# combing artifact degradation - simulates poor deinterlacing with residual comb lines
+combing_prob: 0.1  # probability to apply combing artifacts (keep low, ~10%)
+combing_strength: [0.5, 2.0]  # horizontal pixel shift range for odd scanlines
+combing_blend: 0.3  # blend factor with adjacent lines (0 = pure shift, higher = more ghosting)
+
+gt_size: 256
+queue_size: 180
+
+batch_size_per_gpu: 5  # Changed from 4
+
+datasets:
+  train:
+    name: iphone14+4kv33
+    type: RealESRGANDataset
+    dataroot_gt: datasets/ds_root
+    # meta_info: datasets/ds_root/meta_info/meta_info_iphone14+4kv2_multiscale.txt
+    meta_info: datasets/ds_root/meta_info/meta_info_ip14v33.txt
+
+    io_backend:
+      type: disk
+
+    blur_kernel_size: 21
+    kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob: 0.1
+    blur_sigma: [0.2, 4.5]  # Increase upper bound from 3 to 4.5 for more blur
+    betag_range: [0.5, 4]
+    betap_range: [1, 2]
+
+    blur_kernel_size2: 21
+    kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob2: 0.1
+    blur_sigma2: [0.2, 2.5]  # Increase upper bound from 1.5 to 2.5
+    betag_range2: [0.5, 4]
+    betap_range2: [1, 2]
+
+    final_sinc_prob: 0.8
+
+    gt_size: 256  # Changed from 320
+    use_hflip: True
+    use_rot: False
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 5
+    batch_size_per_gpu: 5  # Changed from 4
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  # Uncomment these for validation
+  val:
+    name: validation
+    type: PairedImageDataset
+    dataroot_gt: datasets/ds_root/validation/hq2
+    # dataroot_lq: datasets/ds_root/validation/lq2_786k
+    dataroot_lq: datasets/ds_root/validation/lq2_auto_85
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: RRDBNet
+  num_in_ch: 3
+  num_out_ch: 3
+  num_feat: 64
+  num_block: 23
+  num_grow_ch: 32
+
+network_d:
+  type: UNetDiscriminator
+  num_in_ch: 3
+  num_feat: 128  # Keep at 128 for discriminator balance
+  skip_connection: True
+
+# path
+path:
+  # v4D: Fresh start from ESRNet pretrain (before any v4 training)
+  # LPIPS reduced from 4.0 to 2.0 for more source-image fidelity
+  # WGAN at 25.0, gp_lambda at 2.0 (stronger discriminator than v4's 3.0)
+  # Goal: Clean training with balanced losses, avoiding v4's WGAN=94.0 artifacts
+  # Starting fresh lets L1+LPIPS balance establish naturally without prior bias
+  pretrain_network_g: experiments/ESRNet_finetune_newdeg/models/net_g_421000.pth
+  # pretrain_network_d: ~
+
+  param_key_g: params_ema
+  strict_load_g: true
+
+  param_key_d: params_ema
+  strict_load_d: true
+
+  resume_state: ~
+
+# training settings
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: 2.000e-5
+    # lr: 3.000e-5  # @iter 1,001,980 (epoch 238)
+    weight_decay: 0
+    betas: [0.0, 0.99]
+
+  optim_d:
+    type: Adam
+    lr: 1.000e-4 # Start at 5x the generator lr
+    # lr: 5.000e-5 # @iter 433630 (epoch 103) reduce to 2.5x generator lr
+    # lr: 2.500e-5 # @iter 943040 (epoch 224) reduce to 1x the generator lr
+    # lr: 1.250e-5 # @iter ~1,020k (epoch 242) reduce to 0.5x generator lr for fine detail learning
+    # lr: 6.250e-6 # @iter ~1,103k (epoch 262) generator needs more room to experiment
+    # lr: 1.000e-5 # @iter ~1,216k (epoch 289) as l_g_gan starting to favor generator
+    weight_decay: 0
+    betas: [0.0, 0.99]   # beta1=0 disables Adam momentum
+    # eps: 1e-8
+  scheduler:
+    type: MultiStepLR
+    # Changes to lr and milestones do not natively work with resume since the
+    # optimizer initial lr sched calc is held in mem and re-saved at each state.
+    # Use the update_states.py script to modify state files to update LR
+    # between restarts.
+    # PyTorch milestons are epochs, BasicSR are iterations.
+    milestones: [2105000]
+    gamma: 0.5
+
+  # A dry-run will compute iterations per epoch.
+  # Example, ip14+4kv3.2 dataset is 3802 iterations per epoch
+  # Example, ip14v33 dataset is 4210 iterations per epoch
+
+  total_iter: 2105000  # 400 epochs for ip14v33 dataset
+  warmup_iter: 4210  # 1 epoch warmup for fresh start with new generator
+
+  # net_d_iters: 10  # Run at 10 or higher for critic to compete
+  # net_d_iters: 5  # Reduced to 5 at epoch 125 (iter 530,460)
+  # net_d_iters: 3  # Reduced to 3 at epoch 134 (iter 568,350)
+  # net_d_iters: 2  # Reduced to 2 at epoch 224 (iter 943,040)
+  # net_d_iters: 1 # Reduced to 1 at epoch 238 (iter 1,001,980)
+  net_d_iters: 3 # Increased back to 3 at epoch 289 (iter 1,116k)
+
+  # Originally @5 the generator beats it so often it's almost like it gives-up,
+  # Using 2 full epochs (1 epoch with LR warmup) and 1 at full LR helps
+  # the discriminiator get a solid footing before the generator adapts/learns.
+  #
+  # Updated training on v4D at epoch 125 (iter 530460): after refining the
+  # discriminator LR (at epoch 103) the generator appears to have trouble
+  # making validation metric gains it had earlier (thus reducing net_d_iters)
+
+  net_d_init_iters: 8420  # 2 full epochs for discriminator pretraining (fresh start)
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.00
+    reduction: mean
+
+  # v4D: LPIPS perceptual loss - REDUCED from 4.0 to 2.0, then increased to 3.5
+  # Previous configs showed outputs differing too much from source images
+  # LPIPS at 4.0 was dominating, causing perceptual drift away from pixel accuracy
+  # Reduced to 2.0, but with WGAN@18.0 (down from 25), LPIPS contribution too weak
+  # Increased to 3.0 @iter ~1,174k to improve texture/detail on degraded inputs
+  lpips_opt:
+    type: LPIPSLoss
+    loss_weight: 3.0  # Increased from 2.0 @iter ~1,174k for better texture preservation
+    net_type: vgg
+    use_dropout: true
+    reduction: mean
+
+  gan_opt:
+    type: GANLoss
+    gan_type: wgan
+    real_label_val: 1.0
+    fake_label_val: 0.0
+    # loss_weight: !!float 25.0  # Kept at 25.0 from v4B
+    # loss_weight: !!float 20.0 # Reduced @iter 1,073,550 (epoch 255) to increase pix accuracy
+    loss_weight: !!float 18.0 # Reduced @iter 1,103,020 (epoch 262)
+
+  # Gradient penalty weight for WGAN-GP (applied in model code)
+  gp_lambda: 3.0
+
+# Uncomment these for validation
+# validation settings
+val:
+  val_freq: 4210
+  save_img: False
+
+  metrics:
+    lpips:
+      type: calculate_lpips
+      crop_border: 4
+      better: lower  # Lower LPIPS = better perceptual similarity
+    niqe:
+      type: calculate_niqe
+      crop_border: 0
+      better: lower  # Lower NIQE = better natural image quality
+    # Removed PSNR/SSIM - poor correlation with perceptual quality
+    # psnr:
+    #   type: calculate_psnr
+    #   crop_border: 4
+    #   test_y_channel: false
+    # ssim:
+    #   type: calculate_ssim
+    #   crop_border: 4
+    #   test_y_channel: false
+
+# logging settings
+logger:
+  print_freq: 100
+  save_checkpoint_freq: 4210
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500
