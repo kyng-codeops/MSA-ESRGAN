@@ -13,7 +13,7 @@ def main():
 
     # Define the base command with placeholders for dynamic arguments
     base_command = (
-        "python inference_realesrgan.py -n RealESRGAN_x4plus -i {input_path} -o {output_path} --model_path {model_path}"
+        "python inference_realesrgan.py -n RealESRGAN_x2plus -s 2 --fp32 -i {input_path} -o {output_path} --model_path {model_path}"
     )
 
     # Add 16-bit flag if requested
@@ -25,7 +25,7 @@ def main():
         "~/Downloads/upscale/esta",
         "~/Downloads/upscale/orig/",
         "~/Downloads/upscale/estadmg/",
-        "~/Documents/validation/lq2_auto_85",
+        "~/Documents/validation/lq2_x2_auto_85",
     ]
 
     # Run the commands for each input directory

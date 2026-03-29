@@ -26,6 +26,10 @@
     "python.testing.pytestEnabled": false,
     "python.testing.unittestEnabled": true,
     "chat.tools.terminal.autoApprove": {
-        "awk": true
+        "awk": true,
+        "/^python3 -c \"\nimport re\n\nwith open\\('/home/kelvin@quantsys\\.net/Documents/tuning/MSA-ESRGAN/experiments/MSA-ESRGAN-RaHinge_x2_ip14v33-v8d/train_MSA-ESRGAN-RaHinge_x2_ip14v33-v8d_20260313_165402\\.log', 'r'\\) as f:\n    lines = f\\.readlines\\(\\)\\[-1000:\\]\n\nout_d_real = \\[\\]\nout_d_fake = \\[\\]\nd_gap = \\[\\]\n\nfor line in lines:\n    if 'out_d_real:' in line:\n        m = re\\.search\\(r'out_d_real: \\(\\[\\\\d\\.e\\+-\\]\\+\\)', line\\)\n        if m: out_d_real\\.append\\(float\\(m\\.group\\(1\\)\\)\\)\n        m = re\\.search\\(r'out_d_fake: \\(\\[\\\\d\\.e\\+-\\]\\+\\)', line\\)\n        if m: out_d_fake\\.append\\(float\\(m\\.group\\(1\\)\\)\\)\n        m = re\\.search\\(r'd_gap: \\(\\[\\\\d\\.e\\+-\\]\\+\\)', line\\)\n        if m: d_gap\\.append\\(float\\(m\\.group\\(1\\)\\)\\)\n\n# Count positive fake predictions \\(D fooled\\)\npos_fake = sum\\(1 for x in out_d_fake if x > 0\\) / len\\(out_d_fake\\) \\* 100 if out_d_fake else 0\n\nprint\\(f'v8d Discriminator Health \\(last \\{len\\(d_gap\\)\\} samples\\):'\\)\nprint\\(f'  out_d_real avg: \\{sum\\(out_d_real\\)/len\\(out_d_real\\):\\.2f\\}'\\)\nprint\\(f'  out_d_fake avg: \\{sum\\(out_d_fake\\)/len\\(out_d_fake\\):\\.2f\\}'\\)\nprint\\(f'  d_gap avg:      \\{sum\\(d_gap\\)/len\\(d_gap\\):\\.2f\\}'\\)\nprint\\(f'  pos_fake:       \\{pos_fake:\\.1f\\}% \\(D fooled rate\\)'\\)\nprint\\(\\)\nprint\\('Interpretation:'\\)\nif sum\\(d_gap\\)/len\\(d_gap\\) > 3\\.0:\n    print\\('  d_gap > 3\\.0: D can discriminate well'\\)\nelse:\n    print\\('  d_gap < 3\\.0: D struggling to discriminate'\\)\nif pos_fake < 40:\n    print\\('  pos_fake < 40%: D rarely fooled \\(strong\\)'\\)\nelif pos_fake > 50:\n    print\\('  pos_fake > 50%: D often fooled \\(weak\\)'\\)\nelse:\n    print\\('  pos_fake 40-50%: D balanced'\\)\n\"\n$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     },
 }

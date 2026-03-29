@@ -70,6 +70,27 @@ class RealESRNetModel(SRModel):
         if self.is_train and self.opt.get('high_order_degradation', True):
             # training data synthesis
             self.gt = data['gt'].to(self.device)
+
+            # ----------------------- Color jitter augmentation (GPU) ----------------------- #
+            # Applies brightness/contrast jitter to GT to improve generalization on flat regions.
+            # This teaches the model that flat areas at different brightness levels should stay flat.
+            color_jitter_prob = self.opt.get('color_jitter_prob', 0)
+            if color_jitter_prob > 0 and np.random.uniform() < color_jitter_prob:
+                brightness_range = self.opt.get('brightness_range', [0.9, 1.1])
+                contrast_range = self.opt.get('contrast_range', [0.9, 1.1])
+
+                # Brightness: multiplicative adjustment
+                brightness = np.random.uniform(brightness_range[0], brightness_range[1])
+                self.gt = self.gt * brightness
+
+                # Contrast: adjust deviation from mean
+                contrast = np.random.uniform(contrast_range[0], contrast_range[1])
+                mean = self.gt.mean()
+                self.gt = (self.gt - mean) * contrast + mean
+
+                # Clamp to valid range [0, 1]
+                self.gt = torch.clamp(self.gt, 0, 1)
+
             # USM sharpen the GT images
             if self.opt['gt_usm'] is True:
                 self.gt = self.usm_sharpener(self.gt)

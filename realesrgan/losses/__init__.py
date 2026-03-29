@@ -1,8 +1,14 @@
 from .gradient_variance_loss import GradientVarianceLoss
 from .relativistic_gan_loss import RelativisticAverageGANLoss
 from .lpips_loss import LPIPSLoss
+from .hinge_loss import HingeLoss, RelativisticHingeLoss
+from .inception_perceptual_loss import InceptionPerceptualLoss
+from .dynamic_loss_balancer import DynamicLossBalancer
 from basicsr.utils.registry import LOSS_REGISTRY
 
 LOSS_REGISTRY.register(GradientVarianceLoss)
 LOSS_REGISTRY.register(RelativisticAverageGANLoss)
 LOSS_REGISTRY.register(LPIPSLoss)
+LOSS_REGISTRY.register(HingeLoss)
+LOSS_REGISTRY.register(RelativisticHingeLoss)
+LOSS_REGISTRY.register(InceptionPerceptualLoss)

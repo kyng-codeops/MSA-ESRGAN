@@ -1,10 +1,23 @@
+import argparse
 import torch
 """
 Script to inspect the structure of a PyTorch state file,
 focusing on optimizer and scheduler components for debugging the update_state_lrs.py script.
 
 """
-state_file = "experiments/MSA-ESRGAN-gvWgpS_x4_ip14v33-d2-cc128-wfix-v2/training_states/8420.state"
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Inspect the structure of a training state file (.state)",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        "-state", type=str, required=True, help="Path to the training state file (.state)"
+    )
+    return parser.parse_args()
+
+args = parse_args()
+state_file = args.state
 state = torch.load(state_file, map_location="cpu")
 
 # Print the top-level keys

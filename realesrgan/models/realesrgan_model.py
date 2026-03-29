@@ -85,6 +85,39 @@ class RealESRGANModel(SRGANModel):
         else:
             self.cri_lpips = None
 
+        # Initialize InceptionV3 perceptual loss
+        if train_opt.get('inception_opt'):
+            self.cri_inception = build_loss(train_opt['inception_opt']).to(self.device)
+        else:
+            self.cri_inception = None
+
+        # Initialize Dynamic Loss Balancer for perceptual losses
+        if train_opt.get('dynamic_balance_opt'):
+            from realesrgan.losses.dynamic_loss_balancer import DynamicLossBalancer
+            balance_opt = train_opt['dynamic_balance_opt']
+
+            # Extract loss names to balance (e.g., ['perceptual', 'inception'])
+            loss_names = balance_opt.get('loss_names', ['perceptual', 'inception'])
+
+            # Extract initial weights from individual loss configs
+            initial_weights = {}
+            for name in loss_names:
+                if name == 'perceptual' and self.cri_perceptual:
+                    initial_weights[name] = train_opt.get('perceptual_opt', {}).get('perceptual_weight', 1.0)
+                elif name == 'inception' and self.cri_inception:
+                    initial_weights[name] = train_opt.get('inception_opt', {}).get('perceptual_weight', 1.0)
+
+            self.loss_balancer = DynamicLossBalancer(
+                loss_names=loss_names,
+                initial_weights=initial_weights,
+                balance_method=balance_opt.get('method', 'loss_ratio'),
+                momentum=balance_opt.get('momentum', 0.9),
+                update_freq=balance_opt.get('update_freq', 10),
+                target_ratio=balance_opt.get('target_ratio', None)
+            ).to(self.device)
+        else:
+            self.loss_balancer = None
+
     @torch.no_grad()
     def _dequeue_and_enqueue(self):
         """It is the training pair pool for increasing the diversity in a batch.
@@ -129,6 +162,27 @@ class RealESRGANModel(SRGANModel):
         if self.is_train and self.opt.get('high_order_degradation', True):
             # training data synthesis
             self.gt = data['gt'].to(self.device)
+
+            # ----------------------- Color jitter augmentation (GPU) ----------------------- #
+            # Applies brightness/contrast jitter to GT to improve generalization on flat regions.
+            # This teaches the model that flat areas at different brightness levels should stay flat.
+            color_jitter_prob = self.opt.get('color_jitter_prob', 0)
+            if color_jitter_prob > 0 and np.random.uniform() < color_jitter_prob:
+                brightness_range = self.opt.get('brightness_range', [0.9, 1.1])
+                contrast_range = self.opt.get('contrast_range', [0.9, 1.1])
+
+                # Brightness: multiplicative adjustment
+                brightness = np.random.uniform(brightness_range[0], brightness_range[1])
+                self.gt = self.gt * brightness
+
+                # Contrast: adjust deviation from mean
+                contrast = np.random.uniform(contrast_range[0], contrast_range[1])
+                mean = self.gt.mean()
+                self.gt = (self.gt - mean) * contrast + mean
+
+                # Clamp to valid range [0, 1]
+                self.gt = torch.clamp(self.gt, 0, 1)
+
             self.gt_usm = self.usm_sharpener(self.gt)
 
             self.kernel1 = data['kernel1'].to(self.device)
@@ -342,15 +396,56 @@ class RealESRGANModel(SRGANModel):
                 l_grad = self.cri_grad(self.output, self.gt)
                 loss_dict['l_grad'] = l_grad
                 l_g_total += l_grad
-            # perceptual loss
-            if self.cri_perceptual:
-                l_g_percep, l_g_style = self.cri_perceptual(self.output, percep_gt)
-                if l_g_percep is not None:
-                    l_g_total += l_g_percep
-                    loss_dict['l_g_percep'] = l_g_percep
-                if l_g_style is not None:
-                    l_g_total += l_g_style
-                    loss_dict['l_g_style'] = l_g_style
+
+            # Dynamic perceptual loss balancing
+            if self.loss_balancer is not None and (self.cri_perceptual or self.cri_inception):
+                # Collect raw perceptual losses (unweighted)
+                perceptual_losses = {}
+
+                if self.cri_perceptual:
+                    l_g_percep, l_g_style = self.cri_perceptual(self.output, percep_gt)
+                    if l_g_percep is not None:
+                        # Remove the weight already applied, balancer will reweight
+                        percep_weight = self.opt['train'].get('perceptual_opt', {}).get('perceptual_weight', 1.0)
+                        perceptual_losses['perceptual'] = l_g_percep / percep_weight
+                        loss_dict['l_g_percep'] = l_g_percep  # Log original weighted value
+
+                if self.cri_inception:
+                    l_g_inception = self.cri_inception(self.output, percep_gt)
+                    # Remove the weight already applied
+                    incep_weight = self.opt['train'].get('inception_opt', {}).get('perceptual_weight', 1.0)
+                    perceptual_losses['inception'] = l_g_inception / incep_weight
+                    loss_dict['l_g_inception'] = l_g_inception  # Log original weighted value
+
+                # Apply dynamic balancing
+                balanced_loss, weighted_losses = self.loss_balancer(perceptual_losses, model=self.net_g)
+                l_g_total += balanced_loss
+
+                # Log dynamic weights
+                current_weights = self.loss_balancer.get_current_weights()
+                for name, weight in current_weights.items():
+                    loss_dict[f'dyn_weight_{name}'] = torch.tensor(weight, device=self.device)
+
+                # Log effective contributions
+                contributions = self.loss_balancer.get_effective_contributions()
+                for name, contrib in contributions.items():
+                    loss_dict[f'dyn_contrib_{name}'] = torch.tensor(contrib, device=self.device)
+            else:
+                # Standard fixed-weight perceptual losses
+                if self.cri_perceptual:
+                    l_g_percep, l_g_style = self.cri_perceptual(self.output, percep_gt)
+                    if l_g_percep is not None:
+                        l_g_total += l_g_percep
+                        loss_dict['l_g_percep'] = l_g_percep
+                    if l_g_style is not None:
+                        l_g_total += l_g_style
+                        loss_dict['l_g_style'] = l_g_style
+                # InceptionV3 perceptual loss
+                if self.cri_inception:
+                    l_g_inception = self.cri_inception(self.output, percep_gt)
+                    l_g_total += l_g_inception
+                    loss_dict['l_g_inception'] = l_g_inception
+
             # LPIPS loss
             if self.cri_lpips:
                 l_g_lpips = self.cri_lpips(self.output, percep_gt)
@@ -359,11 +454,14 @@ class RealESRGANModel(SRGANModel):
             # gan loss
             fake_g_pred = self.net_d(self.output)
 
-            # Check if using relativistic loss
-            is_relativistic = hasattr(self.cri_gan, '__class__') and 'Relativistic' in self.cri_gan.__class__.__name__
+            # Check if using relativistic loss (RaGAN, RaHinge) or hinge loss
+            is_relativistic = (hasattr(self.cri_gan, '__class__') and
+                             ('Relativistic' in self.cri_gan.__class__.__name__ or
+                              'Hinge' in self.cri_gan.__class__.__name__))
+            is_hinge = hasattr(self.cri_gan, '__class__') and 'Hinge' in self.cri_gan.__class__.__name__
 
-            if is_relativistic:
-                # Relativistic loss requires both real and fake predictions
+            if is_relativistic or is_hinge:
+                # Relativistic loss or Hinge loss requires both real and fake predictions
                 real_d_pred = self.net_d(gan_gt)
                 l_g_gan = self.cri_gan(real_d_pred, fake_g_pred, is_disc=False)
             else:
@@ -386,21 +484,21 @@ class RealESRGANModel(SRGANModel):
         real_d_pred = self.net_d(gan_gt)
         fake_d_pred = self.net_d(self.output.detach().clone())
 
-        # Check if using relativistic loss (which handles GP internally)
-        is_relativistic = hasattr(self.cri_gan, '__class__') and 'Relativistic' in self.cri_gan.__class__.__name__
+        # Check if using relativistic loss (RaGAN, RaHinge) or hinge loss
+        is_relativistic = (hasattr(self.cri_gan, '__class__') and
+                         ('Relativistic' in self.cri_gan.__class__.__name__ or
+                          'Hinge' in self.cri_gan.__class__.__name__))
+        is_hinge = hasattr(self.cri_gan, '__class__') and 'Hinge' in self.cri_gan.__class__.__name__
 
-        if is_relativistic:
-            # Relativistic loss handles GP internally
-            l_d_gan = self.cri_gan(
-                real_d_pred, fake_d_pred, is_disc=True,
-                real_img=gan_gt, fake_img=self.output.detach().clone(), net_d=self.net_d
-            )
+        if is_relativistic or is_hinge:
+            # Relativistic or Hinge loss - no GP needed (Hinge is stable without GP)
+            l_d_gan = self.cri_gan(real_d_pred, fake_d_pred, is_disc=True)
         else:
             # Non-relativistic: compute base loss + GP separately
             l_d_gan = self.cri_gan(real_d_pred, True) + self.cri_gan(fake_d_pred, False)
 
-            # Add gradient penalty for WGAN-GP
-            gp_lambda = self.opt['train'].get('gp_lambda', 10.0)
+            # Add gradient penalty only for WGAN-GP (not needed for Hinge Loss)
+            gp_lambda = self.opt['train'].get('gp_lambda', 0)
             if gp_lambda > 0:
                 gp = compute_gradient_penalty(
                     self.net_d, gan_gt, self.output.detach().clone(),
@@ -414,16 +512,18 @@ class RealESRGANModel(SRGANModel):
         loss_dict['out_d_fake'] = torch.mean(fake_d_pred.detach())
         l_d_gan.backward()
 
+        # Gradient clipping for discriminator stability
+        # Prevents extreme gradient spikes while allowing normal gradient flow
+        max_grad_norm = self.opt['train'].get('max_grad_norm_d', None)
+        if max_grad_norm is not None:
+            # Log gradient norm before clipping for monitoring
+            grad_norm_before = torch.nn.utils.clip_grad_norm_(self.net_d.parameters(), max_grad_norm)
+            loss_dict['grad_norm_d'] = grad_norm_before
+
         self.optimizer_d.step()
 
-        # WGAN regularization
-        if getattr(self.cri_gan, 'loss_type', None) == 'wgan':
-            clip_value = 0.01  # You can tune this value
-            for p in self.net_d.parameters():
-                p.data.clamp_(-clip_value, clip_value)
-        elif getattr(self.cri_gan, 'loss_type', None) == 'wgan-gp':
-            # No weight clipping; gradient penalty is added in the loss
-            pass
+        # No weight clipping needed for Hinge Loss (only for vanilla WGAN without GP)
+        # Spectral normalization handles discriminator regularization for Hinge Loss
 
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)

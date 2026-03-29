@@ -1,0 +1,409 @@
+# general settings
+name: MSA-ESRGAN-RaHinge_x4_ip14v33-v7
+model_type: RealESRGANModel
+scale: 4
+num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
+manual_seed: 0
+
+# ----------------- options for synthesizing training data in RealESRGANModel ----------------- #
+# USM the ground-truth - all disabled for natural GT comparison
+l1_gt_usm: False
+percep_gt_usm: False
+gan_gt_usm: False
+
+# the first degradation process
+resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
+resize_range: [0.15, 1.5]
+gaussian_noise_prob: 0.65  # increased from 0.5 for older sensor simulation
+noise_range: [1, 40]  # widened: low end for modern sensors, high end for older sensors
+poisson_scale_range: [0.05, 4.5]  # widened: low end for modern sensors, high end for older shot noise
+gray_noise_prob: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range: [15, 95]  # widened: low end for heavy compression, high end for modern quality
+
+# the second degradation process
+second_blur_prob: 0.9    # Increase from 0.8 to 0.9
+resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
+resize_range2: [0.3, 1.2]
+gaussian_noise_prob2: 0.6  # increased from 0.5 for older sensor simulation
+noise_range2: [1, 35]  # widened: low end for modern sensors, high end for older sensors
+poisson_scale_range2: [0.05, 4]  # widened: low end for modern sensors, high end for older shot noise
+gray_noise_prob2: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range2: [15, 95]  # widened: low end for heavy compression, high end for modern quality
+
+# fake upscale degradation - simulates cheap SD-to-HD stretching (e.g., 480->720/1080, 320->480)
+fake_upscale_prob: 0.15  # probability to apply fake upscale degradation
+fake_upscale_range: [1.5, 2.25]  # upscale factor range (1.5x = 480->720, 2.25x = 480->1080)
+fake_upscale_modes: ['bilinear', 'bicubic', 'nearest']  # cheap interpolation methods
+fake_upscale_mode_weights: [0.45, 0.45, 0.1]  # bilinear/bicubic common, nearest rare but exists
+
+# combing artifact degradation - DISABLED for v6/v7 (suspected to make training unstable)
+combing_prob: 0.0  # disabled - reverting to v3.2-style degradation model
+combing_strength: [0.5, 2.0]  # horizontal pixel shift range for odd scanlines
+combing_blend: 0.3  # blend factor with adjacent lines (0 = pure shift, higher = more ghosting)
+
+gt_size: 256
+queue_size: 180
+
+batch_size_per_gpu: 5
+
+datasets:
+  train:
+    name: iphone14+4kv33
+    type: RealESRGANDataset
+    dataroot_gt: datasets/ds_root
+    meta_info: datasets/ds_root/meta_info/meta_info_ip14v33.txt
+
+    io_backend:
+      type: disk
+
+    blur_kernel_size: 21
+    kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob: 0.1
+    blur_sigma: [0.2, 4.5]  # Increase upper bound from 3 to 4.5 for more blur
+    betag_range: [0.5, 4]
+    betap_range: [1, 2]
+
+    blur_kernel_size2: 21
+    kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob2: 0.1
+    blur_sigma2: [0.2, 2.5]  # Increase upper bound from 1.5 to 2.5
+    betag_range2: [0.5, 4]
+    betap_range2: [1, 2]
+
+    final_sinc_prob: 0.8
+
+    gt_size: 256
+    use_hflip: True
+    use_rot: False
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 5
+    batch_size_per_gpu: 12
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  # Uncomment these for validation
+  val:
+    name: validation
+    type: PairedImageDataset
+    dataroot_gt: datasets/ds_root/validation/hq2
+    dataroot_lq: datasets/ds_root/validation/lq2_auto_85
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: RRDBNet
+  num_in_ch: 3
+  num_out_ch: 3
+  num_feat: 64
+  num_block: 23
+  num_grow_ch: 32
+  scale: 4
+
+network_d:
+  type: UNetDiscriminator  # Your custom MSA discriminator with CSAFM attention modules
+  num_in_ch: 3
+  num_feat: 64  # Reduced from 128 to prevent discriminator from dominating (Hinge Loss is easier than WGAN-GP)
+  skip_connection: True
+
+# path
+path:
+  # use the pre-trained Real-ESRNet model
+  pretrain_network_g: experiments/ESRNet_finetune_newdeg/models/net_g_421000.pth
+  # pretrain_network_d: ~
+
+  param_key_g: params_ema
+  strict_load_g: true
+
+  param_key_d: params_ema
+  strict_load_d: true
+
+  resume_state: ~
+
+# training settings
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 8e-5  # Keep at 8e-5 - generator is stable, no need to reduce
+    weight_decay: 0
+    betas: [0.0, 0.99]  # Beta1=0 is common with spectral norm
+
+  optim_d:
+    type: Adam
+    lr: !!float 1e-5  # Reduced from 3e-5 to minimize extreme outputs (was seeing 20-36, should be -1 to +1)
+    weight_decay: 0
+    betas: [0.0, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [421000]
+    gamma: 0.5
+
+  total_iter: 842000  # 200 epochs (4210 * 200)
+  warmup_iter: -1  # no warm up
+
+  # Discriminator training iterations
+  # RaHinge is stable - can use 1:1 ratio
+  net_d_iters: 1
+  net_d_init_iters: 0  # No D pretraining - standard for stable Hinge Loss
+
+  # ============================================================================
+  # HIERARCHICAL LOSS BALANCING STRATEGY (v7)
+  # ============================================================================
+  #
+  # LEVEL 1: Internal Perceptual Balancing (Automatic via dynamic_balance_opt)
+  #   - VGG19 ↔ Inception balanced by dynamic balancer
+  #   - Target: Equal gradient contribution (1:1 ratio)
+  #   - Result: Combined perceptual loss with balanced texture + structure
+  #
+  # LEVEL 2: External Loss Balancing (Manual - tune these weights)
+  #   - L1 loss: Pixel-level reconstruction anchor
+  #   - Perceptuals (VGG19+Inception): Feature-level quality
+  #   - GAN loss: Adversarial texture refinement
+  #
+  # CURRENT BALANCE:
+  #   L1:          1.0  × ~0.05  = 0.05   (pixel anchor, prevents hallucinations)
+  #   Perceptuals: 1.0  × ~0.05  = 0.05   (combined VGG19+Inception, quality guide)
+  #   GAN:         0.08 × ~0.08  = 0.006  (texture refinement, adds detail)
+  #
+  # TUNING GUIDELINES:
+  #   - L1 at 1.0 is the stable anchor (rarely change)
+  #   - Perceptuals at 1.0 initial (balancer adjusts VGG19 vs Inception internally)
+  #   - GAN at 0.08 adds subtle texture without artifacts
+  #
+  #   To increase perceptual influence:
+  #     - Increase both perceptual_weight and inception_weight proportionally
+  #     - Example: 2.0 for both doubles total perceptual contribution
+  #     - Balancer maintains 1:1 ratio internally
+  #
+  #   To increase GAN influence:
+  #     - Increase gan_opt.loss_weight (0.08 → 0.10 for more texture)
+  #     - Monitor for artifacts if too high
+  #
+  # ============================================================================
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: !!float 20.0  # Target ~0.93 contribution, maintains balance with perceptuals
+    reduction: mean
+
+  # VGG19 perceptual loss - initial weight (dynamically adjusted by balancer)
+  perceptual_opt:
+    type: PerceptualLoss
+    layer_weights:
+      # before relu (pre-activation features)
+      'conv1_2': 0.1
+      'conv2_2': 0.1
+      'conv3_4': 1.0
+      'conv4_4': 1.0
+      'conv5_4': 1.0
+    vgg_type: vgg19
+    use_input_norm: true
+    perceptual_weight: !!float 0.05  # dyn_contrib ~9.5, so 0.05×9.5=0.475, balancer keeps VGG≈Inception
+    style_weight: 0  # No style loss
+    range_norm: false
+    criterion: l1
+
+  # InceptionV3 perceptual loss - initial weight (dynamically adjusted by balancer)
+  inception_opt:
+    type: InceptionPerceptualLoss
+    layer_weights:
+      mixed_5d: 1.0  # Early features (~35x35 resolution)
+      mixed_6e: 1.0  # Mid-level features (~17x17 resolution)
+      mixed_7c: 1.0  # High-level features (~8x8 resolution)
+    perceptual_weight: !!float 0.05  # Balancer will equalize with VGG, combined perceptual ~0.95
+    criterion: l1
+
+  # DYNAMIC LOSS BALANCER - Automatically balances VGG19 and Inception contributions
+  # Solves the sensitivity issue where VGG19 (loss ~0.1) dominates Inception (loss ~0.002) by 125:1
+  dynamic_balance_opt:
+    # Which losses to balance together
+    loss_names: ['perceptual', 'inception']
+
+    # Balancing method:
+    #   'loss_ratio': Balance based on loss magnitude ratios (fast, recommended)
+    #   'gradient': Balance based on gradient magnitudes (accurate but slower)
+    method: loss_ratio
+
+    # Target contribution ratios (relative to first loss)
+    # Equal 1:1 ratio ensures both VGG19 and Inception contribute equally to training
+    # This prevents VGG19 from dominating and allows Inception's multi-scale features to contribute
+    target_ratio:
+      perceptual: 1.0   # Reference loss (VGG19)
+      inception: 1.0    # Equal contribution (Inception) - balancer will increase weight to ~50× to compensate for 50× smaller loss magnitude
+
+    # Smoothing momentum for stable weight updates
+    # 0.9 = slow, stable adaptation; 0.5 = fast, responsive adaptation
+    momentum: 0.9
+
+    # Update frequency (iterations between weight adjustments)
+    # Higher = more stable; Lower = more responsive to changes
+    update_freq: 10
+
+  # Relativistic Average Hinge Loss - texture refinement
+  gan_opt:
+    type: HingeLoss
+    relativistic: true
+    loss_weight: !!float 0.3  # Target ~0.9 contribution (l_g_gan avg 0.12, 0.12×7.5=0.9) - balanced enhancement
+
+# Validation settings
+val:
+  val_freq: 4210  # Every epoch (200 epochs total)
+  save_img: False
+
+  metrics:
+    lpips:
+      type: calculate_lpips
+      crop_border: 4
+      better: lower  # Lower LPIPS = better perceptual similarity
+    niqe:
+      type: calculate_niqe
+      crop_border: 0
+      better: lower  # Lower NIQE = better natural image quality
+
+# logging settings
+logger:
+  print_freq: 100
+  save_checkpoint_freq: 4210  # Every epoch
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500
+
+# ============================================================================
+# V7 CHANGES FROM V6:
+# ============================================================================
+#
+# 1. DYNAMIC LOSS BALANCING (NEW)
+#    - Added dynamic_balance_opt to automatically balance VGG19 and Inception
+#    - Initial weights set to 1.0 for both (balancer will adjust dynamically)
+#    - Target ratio 1:1 ensures equal gradient contributions
+#    - Eliminates manual tuning and adapts to training dynamics
+#
+# 2. EXPECTED BEHAVIOR:
+#    v6 (fixed weights):
+#      VGG19:     0.01 × 0.10  = 0.001000 (125× larger)
+#      Inception: 0.004 × 0.002 = 0.000008
+#
+#    v7 (dynamic balancing):
+#      VGG19:     ~0.01 × 0.10  = 0.001 contribution
+#      Inception: ~0.50 × 0.002 = 0.001 contribution (balanced!)
+#
+#    The balancer will automatically increase Inception's weight to ~50×
+#    to compensate for its 50× smaller loss magnitude.
+#
+# 3. MONITORING (TensorBoard):
+#    - dyn_weight_perceptual: Current VGG19 weight (~0.01)
+#    - dyn_weight_inception: Current Inception weight (will grow to ~0.5)
+#    - dyn_contrib_perceptual: Effective contribution (weight × loss)
+#    - dyn_contrib_inception: Effective contribution (should match VGG19)
+#
+# 4. BENEFITS:
+#    - No more sensitivity to manual weight tuning
+#    - Both perceptual spaces contribute meaningfully
+#    - Better texture + structure balance
+#    - Adapts automatically throughout training
+#
+# ============================================================================# HIERARCHICAL BALANCING: L1 vs PERCEPTUALS vs GAN
+# ============================================================================
+#
+# The dynamic balancer handles INTERNAL perceptual balancing (VGG19 ↔ Inception).
+# You still control EXTERNAL balancing between loss types:
+#
+# THREE LEVELS OF LOSS HIERARCHY:
+#
+#   1. L1 LOSS (Reconstruction Anchor)
+#      - Weight: 1.0 (fixed, rarely change)
+#      - Magnitude: ~0.05 (typical during training)
+#      - Role: Pixel-level fidelity, prevents hallucinations
+#      - Contribution: ~0.05 to total gradient
+#
+#   2. PERCEPTUAL LOSSES (Feature Quality)
+#      - Initial weight: 1.0 for both VGG19 and Inception
+#      - Dynamic balancer ensures 1:1 internal ratio
+#      - Combined magnitude: ~0.05 (after balancing)
+#      - Role: Texture patterns (VGG19) + Structure (Inception)
+#      - Contribution: ~0.05 to total gradient
+#
+#   3. GAN LOSS (Adversarial Refinement)
+#      - Weight: 0.08
+#      - Magnitude: ~0.08
+#      - Role: Adds realistic texture details
+#      - Contribution: ~0.006 to total gradient
+#
+# CURRENT EFFECTIVE BALANCE:
+#   L1:          ~0.05  (55% of total)
+#   Perceptuals: ~0.05  (55% of total, split VGG19/Inception 50/50 internally)
+#   GAN:         ~0.006 (7% of total)
+#
+# WHY THIS WORKS:
+#   - L1 and Perceptuals dominate together (~90%) → stable, GT-faithful training
+#   - GAN adds subtle refinement (~10%) → realistic texture without artifacts
+#   - VGG19 and Inception balanced internally → comprehensive feature coverage
+#
+# ============================================================================
+# TUNING STRATEGIES FOR DIFFERENT GOALS
+# ============================================================================
+#
+# SCENARIO 1: More perceptual influence (richer textures/structure)
+#   perceptual_weight: 2.0   # Double VGG19 contribution
+#   inception_weight: 2.0    # Double Inception contribution
+#   Result: Perceptuals ~0.10, L1 ~0.05, GAN ~0.006
+#   Effect: More feature-driven, less pixel-perfect
+#
+# SCENARIO 2: More GAN influence (sharper, more textured)
+#   gan_opt.loss_weight: 0.12
+#   Result: L1 ~0.05, Perceptuals ~0.05, GAN ~0.01
+#   Effect: Sharper details, risk of artifacts if too high
+#   Warning: Monitor for texture hallucinations
+#
+# SCENARIO 3: More GT fidelity (safer, less creative)
+#   perceptual_weight: 0.5   # Reduce perceptual influence
+#   inception_weight: 0.5
+#   gan_opt.loss_weight: 0.04
+#   Result: L1 dominates at ~0.05, Perceptuals ~0.025, GAN ~0.003
+#   Effect: More faithful to GT, potentially less detailed
+#
+# SCENARIO 4: Prefer structure over texture (Inception-heavy)
+#   dynamic_balance_opt.target_ratio:
+#     perceptual: 0.5   # VGG19 gets half weight
+#     inception: 1.0    # Inception gets full weight
+#   Result: Inception contributes 2× more than VGG19 internally
+#   Effect: Better geometric/structural preservation, less texture emphasis
+#
+# ============================================================================
+# ADVANCED: EXTENDING DYNAMIC BALANCER TO L1/GAN
+# ============================================================================
+#
+# You could extend dynamic balancing to all losses by adding L1 and GAN:
+#
+#   dynamic_balance_opt:
+#     loss_names: ['pixel', 'perceptual', 'inception', 'gan']
+#     target_ratio:
+#       pixel: 1.0        # L1 as reference
+#       perceptual: 1.0   # Equal to L1
+#       inception: 1.0    # Equal to L1
+#       gan: 0.1          # GAN at 10% of others
+#
+# However, this is NOT recommended because:
+#   1. L1, perceptuals, and GAN serve fundamentally different roles
+#   2. You usually WANT asymmetric contributions (L1/perceptual dominant)
+#   3. Over-automation can hide important training signals
+#
+# RECOMMENDED APPROACH (current v7):
+#   - Dynamic balancing for similar losses (VGG19 ↔ Inception)
+#   - Manual control for different loss types (L1 vs Perceptual vs GAN)
+#   - Monitor TensorBoard and adjust manually if needed
+#
+# ============================================================================

@@ -1,0 +1,166 @@
+# Example: Dynamic Loss Balancing for VGG19 + InceptionV3 Perceptual Losses
+#
+# This configuration demonstrates automatic balancing of dual perceptual losses
+# based on their magnitude ratios, addressing the sensitivity issue where:
+#   - VGG19 losses are ~50× larger than Inception losses (~0.1 vs ~0.002)
+#   - Fixed weights lead to VGG19 dominating by 125× in gradient contribution
+#
+# The dynamic balancer automatically adjusts weights during training to achieve
+# target contribution ratios, eliminating manual tuning.
+
+name: MSA-ESRGAN-RaHinge_x4_ip14v33-v6-dynamic
+model_type: RealESRGANModel
+scale: 4
+num_gpu: auto
+manual_seed: 0
+
+# ... (degradation settings same as v6) ...
+
+# training settings
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 8e-5
+    weight_decay: 0
+    betas: [0.0, 0.99]
+
+  optim_d:
+    type: Adam
+    lr: !!float 3e-5
+    weight_decay: 0
+    betas: [0.0, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [421000]
+    gamma: 0.5
+
+  total_iter: 842000
+  warmup_iter: -1
+  net_d_iters: 1
+  net_d_init_iters: 0
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+  # VGG19 perceptual loss - initial weight (will be dynamically adjusted)
+  perceptual_opt:
+    type: PerceptualLoss
+    layer_weights:
+      'conv1_2': 0.1
+      'conv2_2': 0.1
+      'conv3_4': 1.0
+      'conv4_4': 1.0
+      'conv5_4': 1.0
+    vgg_type: vgg19
+    use_input_norm: true
+    perceptual_weight: !!float 1.0  # Initial weight (balancer will adjust this)
+    style_weight: 0
+    range_norm: false
+    criterion: l1
+
+  # InceptionV3 perceptual loss - initial weight (will be dynamically adjusted)
+  inception_opt:
+    type: InceptionPerceptualLoss
+    layer_weights:
+      mixed_5d: 1.0
+      mixed_6e: 1.0
+      mixed_7c: 1.0
+    perceptual_weight: !!float 1.0  # Initial weight (balancer will adjust this)
+    criterion: l1
+
+  # DYNAMIC LOSS BALANCER - Automatically adjusts perceptual loss weights
+  dynamic_balance_opt:
+    # Which losses to balance together
+    loss_names: ['perceptual', 'inception']
+
+    # Balancing method:
+    #   'loss_ratio': Balance based on loss magnitude ratios (recommended, fast)
+    #   'gradient': Balance based on gradient magnitudes (more accurate, slower)
+    method: loss_ratio
+
+    # Target contribution ratios (relative to first loss)
+    # This makes both losses contribute equally to training
+    # Example: {'perceptual': 1.0, 'inception': 1.0} = equal 1:1 contribution
+    #          {'perceptual': 1.0, 'inception': 0.5} = VGG19 contributes 2× more
+    target_ratio:
+      perceptual: 1.0
+      inception: 1.0  # Equal contribution (solves the 125:1 imbalance!)
+
+    # Smoothing momentum (0.9 = slow, stable; 0.5 = fast, responsive)
+    momentum: 0.9
+
+    # Update frequency (iterations between weight updates)
+    # Higher = more stable, Lower = more responsive
+    update_freq: 10
+
+  # GAN loss
+  gan_opt:
+    type: HingeLoss
+    relativistic: true
+    loss_weight: !!float 0.08
+
+# Validation settings
+val:
+  val_freq: 4210
+  save_img: False
+  metrics:
+    lpips:
+      type: calculate_lpips
+      crop_border: 4
+      better: lower
+    niqe:
+      type: calculate_niqe
+      crop_border: 0
+      better: lower
+
+# ============================================================================
+# HOW IT WORKS:
+# ============================================================================
+#
+# Without dynamic balancing (current v6):
+#   VGG19:     0.01 × 0.10  = 0.001000 gradient contribution
+#   Inception: 0.004 × 0.002 = 0.000008 gradient contribution
+#   Ratio: 125:1 (VGG19 dominates)
+#
+# With dynamic balancing (target_ratio 1:1):
+#   Balancer automatically adjusts weights to:
+#   VGG19:     ~0.01 × 0.10  = 0.001 gradient contribution
+#   Inception: ~0.50 × 0.002 = 0.001 gradient contribution
+#   Ratio: 1:1 (balanced contribution!)
+#
+# The balancer monitors loss magnitudes every 10 iterations and smoothly
+# adjusts the weights to maintain your target ratio. This eliminates the
+# need for manual tuning and adapts to changes during training.
+#
+# Logged values (TensorBoard):
+#   l_g_percep: Raw VGG19 loss (for comparison)
+#   l_g_inception: Raw Inception loss (for comparison)
+#   dyn_weight_perceptual: Current dynamic weight for VGG19
+#   dyn_weight_inception: Current dynamic weight for Inception
+#   dyn_contrib_perceptual: Effective gradient contribution (weight × loss)
+#   dyn_contrib_inception: Effective gradient contribution (weight × loss)
+#
+# ============================================================================
+# TUNING GUIDELINES:
+# ============================================================================
+#
+# 1. Equal contribution (recommended starting point):
+#    target_ratio: {perceptual: 1.0, inception: 1.0}
+#
+# 2. Prefer VGG19 texture guidance:
+#    target_ratio: {perceptual: 1.0, inception: 0.5}  # VGG19 gets 2× weight
+#
+# 3. Prefer Inception multi-scale features:
+#    target_ratio: {perceptual: 0.5, inception: 1.0}  # Inception gets 2× weight
+#
+# 4. Faster adaptation (if loss scales change rapidly):
+#    momentum: 0.7  # More responsive to changes
+#
+# 5. More stable (if weights oscillate):
+#    momentum: 0.95  # Slower, smoother updates
+#    update_freq: 20  # Update less frequently

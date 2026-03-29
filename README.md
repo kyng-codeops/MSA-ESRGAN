@@ -23,8 +23,8 @@ Multiple additional changes have been incorporated further improving the resulti
 MSA stands for Multi-Scale Attention and refers to the discriminator network architecture of the GAN.  This GAN uses the
 exact same generator as ESRGAN, Real-ESRGAN, and others (I believe BSRGAN also uses the same generator).  The new discriminator
 is meant to improve the GAN's ability to focus attention in areas that significantly improved perceptual quality but
-using a combination of Channel Attention, Spatial Attention, upgraded GAN loss criterion and over all loss models. 
-From the various versions of the same paper, the authors only called for the use or ReLU as the activation function.  
+using a combination of Channel Attention, Spatial Attention, upgraded GAN loss criterion and over all loss models.
+From the various versions of the same paper, the authors only called for the use or ReLU as the activation function.
 However, the first couple rounds of training demonstrated the need to use Leaky ReLU for stability.
 
 There is a WGAN-gp branch which is the most advanced and highest quality producing model. This is a Wasserstein GAN
@@ -34,14 +34,14 @@ WGAN loss weighting adjustments to balance against L1loss, perceptual loss, and 
 Using meaninful loss magnitudes allows a trainer to compute accurate loss-mix levels to achieve targeted results.
 
 Example: L1loss and perceptual loss shape the structure, while WGAN shapes realism, and GV sharpens boundaries averaged-out
-by the L1loss.  I'm not going to post the model I trained, but so far, SSIM values around 0.8891 and PSNR values around 31.91
+by the L1loss.  I'm not going to post the model I trained, but so far, SSIM values around 0.8897 and PSNR values around 31.93
 have been achieved using a private dataset with over 21,000 4K photos and video-frame stills.
 
-With a dataset of nearly 21,000 4K and higher images of mostly people, places, and more, I was able to make MSA-ESRGAN generate 
-skin textures and skin tone gradients. Real-ESRGAN had a tendency to attempt sharpening blurred backgrounds and blurring some 
+With a dataset of nearly 21,000 4K and higher images of mostly people, places, and more, I was able to make MSA-ESRGAN generate
+skin textures and skin tone gradients. Real-ESRGAN had a tendency to attempt sharpening blurred backgrounds and blurring some
 foregrounds.  This repo is a functioning MSA (Multi-Scale Attention) relativistic Wasserstein-GAN with Gradient Penalties.
 
-Since this is a work in-progress, I will eventually fix-up this repo's documentation.  For now, there will be tons of old 
+Since this is a work in-progress, I will eventually fix-up this repo's documentation.  For now, there will be tons of old
 references and links and typos.
 
 Inferencing this model is identical to Real-ESRGAN so I'm keeping much of that documentation for now.  The training procedures

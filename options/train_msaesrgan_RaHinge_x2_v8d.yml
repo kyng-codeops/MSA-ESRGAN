@@ -1,0 +1,381 @@
+# general settings
+name: MSA-ESRGAN-RaHinge_x2_ip14v33-v8d
+model_type: RealESRGANModel
+scale: 2
+num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
+manual_seed: 0
+
+# ==============================================================================
+# TRAINING HISTORY: v8 → v8a → v8b → v8c → v8d
+# ==============================================================================
+#
+# v8 (baseline): LR_g=1e-4, LR_d=1e-4 (1:1), DP=20% of L1, GAN=50% of L1
+#   - Observed: Very fast texture learning, good reconstruction fidelity
+#   - At ~67k iters: out_d_real/fake oscillating wildly (-2.3 to +9.1)
+#   - NIQE improved steadily (6.89→6.35), LPIPS struggled (best 0.0103 @ 42k)
+#   - Visual: Backgrounds starting to over-sharpen, distant faces good
+#   - Problem: GAN learned texture so fast it started over-applying to backgrounds
+#
+# v8a: LR_g=1e-4, LR_d=2e-5 (5:1), DP=40% of L1, GAN=20% of L1
+#   - Fixed inverted loss ratio (was GAN 2.5x larger than perceptual)
+#   - LPIPS improved significantly: 0.0103 → 0.0068 (34% better) @ 21k
+#   - Visual quality continued improving through 126k despite metric plateau
+#   - Actual averages: DP=37.6%, GAN=19.6% of L1 (close to targets)
+#   - D metrics: d_gap=3.49, pos_fake=37.3% (D healthy)
+#
+# v8b: Same LRs, DP=45% of L1, GAN=30% of L1
+#   - Hypothesis: v8a's balance works but both losses may be under-weighted
+#   - Actual results (783 iters): DP=44.0%, GAN=25.3% of L1
+#   - GAN below target (25% vs 30%) - weight 0.049 insufficient
+#   - D metrics: d_gap=2.50, pos_fake=51.4% (D weakening!)
+#
+# v8c: Same LRs, DP=50% of L1, GAN=30% of L1
+#   - Applied GAN weight 0.065 (1.12x cross-talk correction)
+#   - D metrics: d_gap=2.28, pos_fake=48.1% (D still struggling)
+#   - Discovery: D gets WEAKER as DP-percep increases (counter-intuitive)
+#   - See cross-talk section below for full analysis
+#
+# v8d (THIS CONFIG): LR_g=1e-4, LR_d=2.5e-5 (4:1), DP=50% of L1, GAN=30% of L1
+#   - EXPERIMENT: Higher D learning rate (4:1 vs 5:1) to help D stay competent
+#   - Hypothesis: When DP weight is high, D needs faster learning to keep up
+#               with structurally improved G outputs
+#   - Same loss weights as corrected v8c (GAN=0.065, DP=0.049)
+#   - Target: Improve D metrics (d_gap closer to 3.0, pos_fake < 40%)
+#
+# ==============================================================================
+# DISCOVERED: PERCEPTUAL-GAN CROSS-TALK EFFECTS
+# ==============================================================================
+# When perceptual weight increases, generator outputs become more structurally
+# correct/realistic. This has TWO effects:
+#
+# EFFECT 1: GAN Loss Magnitude Decreases
+#   - D finds G's outputs harder to distinguish from real
+#   - l_g_gan decreases naturally, independent of configured weight
+#   - Requires GAN weight correction factor: ~1.12x
+#
+# EFFECT 2: Discriminator Gets WEAKER (counter-intuitive!)
+#   - D struggles more with structurally better G outputs
+#   - Metrics show clear trend as DP increases:
+#       v8a (DP 38%): d_gap=3.49, pos_fake=37.3%
+#       v8b (DP 45%): d_gap=2.50, pos_fake=51.4%
+#       v8c (DP 50%): d_gap=2.28, pos_fake=48.1%
+#   - Implication: LR ratio should DECREASE to help D keep up
+#
+# TWO-FACTOR CORRECTION FOR HIGH PERCEPTUAL WEIGHTS:
+#   1. GAN weight × 1.12 - compensate for reduced l_g_gan magnitude
+#   2. LR ratio 4:1 (or 3:1) instead of 5:1 - help D stay competent
+#
+# THIS IS v8d - implementing the 4:1 LR ratio adjustment
+# ==============================================================================
+
+# ----------------- options for synthesizing training data in RealESRGANModel ----------------- #
+# USM the ground-truth - all disabled for natural GT comparison
+l1_gt_usm: False
+percep_gt_usm: False
+gan_gt_usm: False
+
+# the first degradation process
+resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
+resize_range: [0.15, 1.5]
+gaussian_noise_prob: 0.65  # increased from 0.5 for older sensor simulation
+noise_range: [1, 30]  # Middle ground: original Real-ESRGAN ~[1,25], severe was [1,40]
+poisson_scale_range: [0.05, 3.5]  # Middle ground: original ~[0.05,3], severe was [0.05,4.5]
+gray_noise_prob: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range: [25, 95]  # Middle ground: original [30,95], severe was [15,95]
+
+# the second degradation process
+second_blur_prob: 0.9    # Increase from 0.8 to 0.9
+resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
+resize_range2: [0.3, 1.2]
+gaussian_noise_prob2: 0.6  # increased from 0.5 for older sensor simulation
+noise_range2: [1, 25]  # Middle ground: original Real-ESRGAN ~[1,20], severe was [1,35]
+poisson_scale_range2: [0.05, 3.0]  # Middle ground: original ~[0.05,2.5], severe was [0.05,4]
+gray_noise_prob2: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range2: [25, 95]  # Middle ground: original [30,95], severe was [15,95]
+
+# fake upscale degradation - simulates cheap SD-to-HD stretching (e.g., 480->720/1080, 320->480)
+fake_upscale_prob: 0.12  # Middle ground: moderate frequency
+fake_upscale_range: [1.5, 2.1]  # Middle ground: original ~[1.5,2.0], severe was [1.5,2.25]
+fake_upscale_modes: ['bilinear', 'bicubic', 'nearest']  # cheap interpolation methods
+fake_upscale_mode_weights: [0.45, 0.45, 0.1]  # bilinear/bicubic common, nearest rare but exists
+
+# combing artifact degradation - DISABLED for v6/v7 (suspected to make training unstable)
+combing_prob: 0.0  # disabled - reverting to v3.2-style degradation model
+combing_strength: [0.5, 2.0]  # horizontal pixel shift range for odd scanlines
+combing_blend: 0.3  # blend factor with adjacent lines (0 = pure shift, higher = more ghosting)
+
+gt_size: 256
+queue_size: 240  # Increased from 180 to provide more diversity and prevent discriminator saturation
+
+batch_size_per_gpu: 5
+
+datasets:
+  train:
+    name: iphone14+4kv33
+    type: RealESRGANDataset
+    dataroot_gt: datasets/ds_root
+    meta_info: datasets/ds_root/meta_info/meta_info_ip14v33.txt
+
+    io_backend:
+      type: disk
+
+    blur_kernel_size: 21
+    kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob: 0.1
+    blur_sigma: [0.2, 4.5]  # Increase upper bound from 3 to 4.5 for more blur
+    betag_range: [0.5, 4]
+    betap_range: [1, 2]
+
+    blur_kernel_size2: 21
+    kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob2: 0.1
+    blur_sigma2: [0.2, 2.5]  # Increase upper bound from 1.5 to 2.5
+    betag_range2: [0.5, 4]
+    betap_range2: [1, 2]
+
+    final_sinc_prob: 0.8
+
+    # color jitter augmentation - helps model generalize on flat/uniform regions
+    # Applied to GT before degradation to teach that flat areas at different
+    # brightness levels should stay flat (prevents artifacts on white backgrounds)
+    color_jitter_prob: 0.3
+    brightness_range: [0.85, 1.15]  # multiplicative brightness adjustment
+    contrast_range: [0.85, 1.15]    # contrast adjustment around mean
+
+    gt_size: 256
+    use_hflip: True
+    use_rot: False
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 5
+    batch_size_per_gpu: 12
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  # Uncomment these for validation
+  val:
+    name: validation
+    type: PairedImageDataset
+    dataroot_gt: datasets/ds_root/validation/hq2
+    dataroot_lq: datasets/ds_root/validation/lq2_x2_auto_85
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: RRDBNet
+  num_in_ch: 3
+  num_out_ch: 3
+  num_feat: 64
+  num_block: 23
+  num_grow_ch: 32
+  scale: 2
+
+network_d:
+  type: UNetDiscriminator  # Your custom MSA discriminator with CSAFM attention modules
+  num_in_ch: 3
+  num_feat: 64
+  skip_connection: True
+
+# path
+path:
+  # NOTE: 2x pretrained ESRNet model with same degradation pipeline as this GAN
+  pretrain_network_g: experiments/realesrnet_x2_ip14v33/models/net_g_65000.pth
+  # pretrain_network_d: ~
+
+  param_key_g: params_ema
+  strict_load_g: true
+
+  param_key_d: params_ema
+  strict_load_d: true
+
+  resume_state: ~  # Fresh training - no resume state
+
+# training settings
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 1e-4  # Same as v8/v8a/v8b
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  optim_d:
+    type: Adam
+    # LR RATIO HISTORY:
+    # v8: 1e-4 (1:1 ratio) - caused unstable d_gap (1.2→8.3), oscillating outputs
+    # v8a-v8c: 2e-5 (5:1 ratio) - stable but D weakened as DP increased:
+    #   v8a (DP 38%): d_gap=3.49, pos_fake=37.3%
+    #   v8b (DP 45%): d_gap=2.50, pos_fake=51.4%
+    #   v8c (DP 50%): d_gap=2.28, pos_fake=48.1%
+    # v8d: 2.5e-5 (4:1 ratio) - help D keep up with better G outputs from high DP
+    lr: !!float 2.5e-5
+    weight_decay: 0
+    betas: [0.0, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [175500, 351000, 438750]  # Halve LR at 100, 200 & 250 epochs to finish
+    gamma: 0.5
+
+  total_iter: 702000  # 400 epochs × 1755 iters/epoch
+  warmup_iter: -1  # no warm up
+
+  # Discriminator gradient clipping for stability
+  max_grad_norm_d: 10.0
+
+  # Discriminator training iterations
+  net_d_iters: 1
+  net_d_init_iters: 0  # No D pretraining - standard for stable Hinge Loss
+
+  # ============================================================================
+  # HIERARCHICAL LOSS BALANCING STRATEGY (v8d)
+  # ============================================================================
+  #
+  # v8c results and learnings:
+  #   - L1 avg: 0.697
+  #   - DP-percep: 50.5% of L1 (target 50%) ✓
+  #   - GAN: 26.9% of L1 (target 30%) - needed 1.12x correction
+  #   - D metrics weakening: d_gap=2.28, pos_fake=48.1%
+  #
+  # v8d experiment: Same loss targets but 4:1 LR ratio (was 5:1)
+  #   - GAN weight: 0.065 (corrected from 0.058 with 1.12x factor)
+  #   - LR_d: 2.5e-5 (from 2e-5) to help D keep up with better G
+  #
+  # TARGET LOSS BALANCE (same as v8c):
+  #   L1:          100%   (anchor)
+  #   Perceptual:  ~50%   (semantic guidance for blur regions)
+  #   GAN:         ~30%   (texture refinement with correction)
+  #   Ratio:       1.67:1 (perceptual-dominant)
+  #
+  # ============================================================================
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: !!float 20.0  # Anchor weight - same as v7a/v8a/v8b
+    reduction: mean
+
+  # VGG19 perceptual loss
+  # v8b: 0.043 → 44% of L1
+  # v8c: 0.049 → 50% of L1 (increased for better blur region guidance)
+  perceptual_opt:
+    type: PerceptualLoss
+    layer_weights:
+      # before relu (pre-activation features)
+      'conv1_2': 0.1
+      'conv2_2': 0.1
+      'conv3_4': 1.0
+      'conv4_4': 0.7
+      'conv5_4': 0.5
+    vgg_type: vgg19
+    use_input_norm: true
+    perceptual_weight: !!float 0.049  # Target ~50% of L1 contribution
+    style_weight: 0  # No style loss
+    range_norm: false
+    criterion: l1
+
+  # InceptionV3 perceptual loss
+  # v8c: 0.049 → 50% of L1 (balanced with VGG19 via dynamic balancer)
+  inception_opt:
+    type: InceptionPerceptualLoss
+    layer_weights:
+      mixed_5d: 1.0  # Early features (~35x35 resolution)
+      mixed_6e: 1.0  # Mid-level features (~17x17 resolution)
+      mixed_7c: 1.0  # High-level features (~8x8 resolution)
+    perceptual_weight: !!float 0.049  # Target ~50% of L1 contribution
+    criterion: l1
+
+  # DYNAMIC LOSS BALANCER - Automatically balances VGG19 and Inception contributions
+  dynamic_balance_opt:
+    loss_names: ['perceptual', 'inception']
+    method: loss_ratio
+    target_ratio:
+      perceptual: 1.0   # Reference loss (VGG19)
+      inception: 1.0    # Equal contribution (Inception)
+    momentum: 0.9
+    update_freq: 10
+
+  # Relativistic Average Hinge Loss - texture refinement
+  # v8b: 0.049 → 25.3% of L1 (below 30% target)
+  # v8c initial: 0.058 → 26.9% of L1 (still below 30% target)
+  # v8c corrected: 0.065 → 30% of L1 (with 1.12x cross-talk correction)
+  #
+  # CROSS-TALK CORRECTION APPLIED:
+  # Naive calculation: 0.058 for 30% target
+  # Actual result: 26.9% (missed by 3.1pp)
+  # Correction: 0.058 × (30/26.9) = 0.065
+  # This aligns with empirical 1.12x factor from v8a/v8b/v8c analysis
+  gan_opt:
+    type: HingeLoss
+    relativistic: true
+    margin: !!float 0.9  # Label smoothing
+    loss_weight: !!float 0.065  # Corrected from 0.058 (naive) with 1.12x factor
+
+# Validation settings
+val:
+  val_freq: 3510  # Every 3 epoch
+  save_img: False
+
+  metrics:
+    lpips:
+      type: calculate_lpips
+      crop_border: 4
+      better: lower
+    niqe:
+      type: calculate_niqe
+      crop_border: 0
+      better: lower
+
+# logging settings
+logger:
+  print_freq: 100
+  save_checkpoint_freq: 3510  # Every 3 epochs
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500
+
+# ============================================================================
+# V8D CHANGES FROM V8C:
+# ============================================================================
+#
+# 1. LR RATIO ADJUSTMENT (main change):
+#    - LR_d: 2e-5 → 2.5e-5 (5:1 → 4:1 ratio)
+#    - Reason: D metrics showed progressive weakening as DP increased:
+#        v8a (DP 38%): d_gap=3.49, pos_fake=37.3% (healthy)
+#        v8b (DP 45%): d_gap=2.50, pos_fake=51.4% (struggling)
+#        v8c (DP 50%): d_gap=2.28, pos_fake=48.1% (still weak)
+#    - Hypothesis: D needs faster learning to keep up with structurally
+#                  improved G outputs from high perceptual weight
+#
+# 2. LOSS WEIGHTS (unchanged from corrected v8c):
+#    - GAN weight: 0.065 (with 1.12x cross-talk correction)
+#    - DP weight: 0.049 (targets 50% of L1)
+#    - Target ratio: DP:GAN = 1.67:1
+#
+# 3. EXPECTED OUTCOMES:
+#    - d_gap should increase toward 3.0 (from 2.28 in v8c)
+#    - pos_fake% should decrease toward 35-40% (from 48.1% in v8c)
+#    - GAN contribution should hit 30% target (with corrected weight)
+#
+# 4. TWO-FACTOR CORRECTION FOR HIGH PERCEPTUAL WEIGHTS:
+#    When DP-percep > 40% of L1, apply BOTH corrections:
+#    a) GAN_weight × 1.12 - compensate for reduced l_g_gan magnitude
+#    b) LR ratio 4:1 (not 5:1) - help D stay competent against better G
+#
+# 5. CROSS-TALK MECHANISM (discovered in v8c analysis):
+#    - Higher perceptual → G produces structurally better images
+#    - D finds them HARDER to distinguish from real (counter-intuitive!)
+#    - l_g_gan decreases naturally + D metrics worsen
+#    - Both effects require compensation for optimal training
+#
+# ============================================================================
