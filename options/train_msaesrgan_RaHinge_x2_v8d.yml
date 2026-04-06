@@ -221,7 +221,7 @@ train:
     milestones: [175500, 351000, 438750]  # Halve LR at 100, 200 & 250 epochs to finish
     gamma: 0.5
 
-  total_iter: 702000  # 400 epochs × 1755 iters/epoch
+  total_iter: 1404000  # 800 epochs × 1755 iters/epoch
   warmup_iter: -1  # no warm up
 
   # Discriminator gradient clipping for stability

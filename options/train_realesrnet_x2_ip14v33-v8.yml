@@ -1,0 +1,170 @@
+# ESRNet 2x Training with v7b Degradation Pipeline
+# Pre-training generator for MSA-ESRGAN 2x GAN training
+# Use this output as pretrain_network_g for train_msaesrgan_RaHinge_x2_v8.yml
+
+# general settings
+name: realesrnet_x2_ip14v33-v8
+model_type: RealESRNetModel
+scale: 2
+num_gpu: auto
+manual_seed: 0
+
+# ----------------- options for synthesizing training data in RealESRNetModel ----------------- #
+gt_usm: True  # USM the ground-truth
+
+# the first degradation process (from v7b)
+resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
+resize_range: [0.15, 1.5]
+gaussian_noise_prob: 0.65  # increased from 0.5 for older sensor simulation
+noise_range: [1, 30]  # Middle ground: original Real-ESRGAN ~[1,25], severe was [1,40]
+poisson_scale_range: [0.05, 3.5]  # Middle ground: original ~[0.05,3], severe was [0.05,4.5]
+gray_noise_prob: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range: [25, 95]  # Middle ground: original [30,95], severe was [15,95]
+
+# the second degradation process (from v7b)
+second_blur_prob: 0.9    # Increase from 0.8 to 0.9
+resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
+resize_range2: [0.3, 1.2]
+gaussian_noise_prob2: 0.6  # increased from 0.5 for older sensor simulation
+noise_range2: [1, 25]  # Middle ground: original Real-ESRGAN ~[1,20], severe was [1,35]
+poisson_scale_range2: [0.05, 3.0]  # Middle ground: original ~[0.05,2.5], severe was [0.05,4]
+gray_noise_prob2: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range2: [25, 95]  # Middle ground: original [30,95], severe was [15,95]
+
+# fake upscale degradation - simulates cheap SD-to-HD stretching (from v7b)
+fake_upscale_prob: 0.12  # Middle ground: moderate frequency
+fake_upscale_range: [1.5, 2.1]  # Middle ground: original ~[1.5,2.0], severe was [1.5,2.25]
+fake_upscale_modes: ['bilinear', 'bicubic', 'nearest']  # cheap interpolation methods
+fake_upscale_mode_weights: [0.45, 0.45, 0.1]  # bilinear/bicubic common, nearest rare but exists
+
+# combing artifact degradation - DISABLED (from v7b)
+combing_prob: 0.0  # disabled - suspected to make training unstable
+combing_strength: [0.5, 2.0]  # horizontal pixel shift range for odd scanlines
+combing_blend: 0.3  # blend factor with adjacent lines
+
+gt_size: 256
+queue_size: 240  # Matches v7b
+
+# dataset and data loader settings
+datasets:
+  train:
+    name: iphone14+4kv33
+    type: RealESRGANDataset
+    dataroot_gt: datasets/ds_root
+    meta_info: datasets/ds_root/meta_info/meta_info_ip14v33.txt
+
+    io_backend:
+      type: disk
+
+    blur_kernel_size: 21
+    kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob: 0.1
+    blur_sigma: [0.2, 4.5]  # Increase upper bound from 3 to 4.5 for more blur
+    betag_range: [0.5, 4]
+    betap_range: [1, 2]
+
+    blur_kernel_size2: 21
+    kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob2: 0.1
+    blur_sigma2: [0.2, 2.5]  # Increase upper bound from 1.5 to 2.5
+    betag_range2: [0.5, 4]
+    betap_range2: [1, 2]
+
+    final_sinc_prob: 0.8
+
+    # color jitter augmentation - helps model generalize on flat/uniform regions
+    # Applied to GT before degradation to teach that flat areas at different
+    # brightness levels should stay flat (prevents artifacts on white backgrounds)
+    color_jitter_prob: 0.3
+    brightness_range: [0.85, 1.15]  # multiplicative brightness adjustment
+    contrast_range: [0.85, 1.15]    # contrast adjustment around mean
+
+    gt_size: 256
+    use_hflip: True
+    use_rot: False
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 5
+    batch_size_per_gpu: 12
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    name: validation
+    type: PairedImageDataset
+    dataroot_gt: datasets/ds_root/validation/hq2
+    dataroot_lq: datasets/ds_root/validation/lq2_x2_auto_85
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: RRDBNet
+  num_in_ch: 3
+  num_out_ch: 3
+  num_feat: 64
+  num_block: 23
+  num_grow_ch: 32
+  scale: 2
+
+# path
+path:
+  pretrain_network_g: ~  # Random init for clean L1 pretraining
+  param_key_g: params_ema
+  strict_load_g: true
+  resume_state: ~
+
+# training settings
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 2e-4  # Standard ESRNet training LR
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [400000, 800000, 900000, 950000]
+    gamma: 0.5
+
+  total_iter: 1000000  # Standard ESRNet training duration
+  warmup_iter: -1  # No warmup
+
+  # losses - L1 only (ESRNet pre-training)
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+# validation settings
+val:
+  val_freq: 5000
+  save_img: False
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 4
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 4
+      test_y_channel: false
+
+# logging settings
+logger:
+  print_freq: 100
+  save_checkpoint_freq: 5000
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500
