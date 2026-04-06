@@ -1,0 +1,212 @@
+# general settings
+name: MSA-ESRGAN-RaHinge_x4_ip14v33-v5
+model_type: RealESRGANModel
+scale: 4
+num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
+manual_seed: 0
+
+# ----------------- options for synthesizing training data in RealESRGANModel ----------------- #
+# USM the ground-truth - all disabled for natural GT comparison
+l1_gt_usm: False
+percep_gt_usm: False
+gan_gt_usm: False
+
+# the first degradation process
+resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
+resize_range: [0.15, 1.5]
+gaussian_noise_prob: 0.65  # increased from 0.5 for older sensor simulation
+noise_range: [1, 40]  # widened: low end for modern sensors, high end for older sensors
+poisson_scale_range: [0.05, 4.5]  # widened: low end for modern sensors, high end for older shot noise
+gray_noise_prob: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range: [15, 95]  # widened: low end for heavy compression, high end for modern quality
+
+# the second degradation process
+second_blur_prob: 0.9    # Increase from 0.8 to 0.9
+resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
+resize_range2: [0.3, 1.2]
+gaussian_noise_prob2: 0.6  # increased from 0.5 for older sensor simulation
+noise_range2: [1, 35]  # widened: low end for modern sensors, high end for older sensors
+poisson_scale_range2: [0.05, 4]  # widened: low end for modern sensors, high end for older shot noise
+gray_noise_prob2: 0.5  # increased from 0.4 for older sensor simulation
+jpeg_range2: [15, 95]  # widened: low end for heavy compression, high end for modern quality
+
+# fake upscale degradation - simulates cheap SD-to-HD stretching (e.g., 480->720/1080, 320->480)
+fake_upscale_prob: 0.15  # probability to apply fake upscale degradation
+fake_upscale_range: [1.5, 2.25]  # upscale factor range (1.5x = 480->720, 2.25x = 480->1080)
+fake_upscale_modes: ['bilinear', 'bicubic', 'nearest']  # cheap interpolation methods
+fake_upscale_mode_weights: [0.45, 0.45, 0.1]  # bilinear/bicubic common, nearest rare but exists
+
+# combing artifact degradation - simulates poor deinterlacing with residual comb lines
+combing_prob: 0.1  # probability to apply combing artifacts (keep low, ~10%)
+combing_strength: [0.5, 2.0]  # horizontal pixel shift range for odd scanlines
+combing_blend: 0.3  # blend factor with adjacent lines (0 = pure shift, higher = more ghosting)
+
+gt_size: 256
+queue_size: 180
+
+batch_size_per_gpu: 5
+
+datasets:
+  train:
+    name: iphone14+4kv33
+    type: RealESRGANDataset
+    dataroot_gt: datasets/ds_root
+    meta_info: datasets/ds_root/meta_info/meta_info_ip14v33.txt
+
+    io_backend:
+      type: disk
+
+    blur_kernel_size: 21
+    kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob: 0.1
+    blur_sigma: [0.2, 4.5]  # Increase upper bound from 3 to 4.5 for more blur
+    betag_range: [0.5, 4]
+    betap_range: [1, 2]
+
+    blur_kernel_size2: 21
+    kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob2: 0.1
+    blur_sigma2: [0.2, 2.5]  # Increase upper bound from 1.5 to 2.5
+    betag_range2: [0.5, 4]
+    betap_range2: [1, 2]
+
+    final_sinc_prob: 0.8
+
+    gt_size: 256
+    use_hflip: True
+    use_rot: False
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 5
+    batch_size_per_gpu: 12
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  # Uncomment these for validation
+  val:
+    name: validation
+    type: PairedImageDataset
+    dataroot_gt: datasets/ds_root/validation/hq2
+    dataroot_lq: datasets/ds_root/validation/lq2_auto_85
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: RRDBNet
+  num_in_ch: 3
+  num_out_ch: 3
+  num_feat: 64
+  num_block: 23
+  num_grow_ch: 32
+  scale: 4
+
+network_d:
+  type: UNetDiscriminator  # Your custom MSA discriminator with CSAFM attention modules
+  num_in_ch: 3
+  num_feat: 64  # Reduced from 128 to prevent discriminator from dominating (Hinge Loss is easier than WGAN-GP)
+  skip_connection: True
+
+# path
+path:
+  # use the pre-trained Real-ESRNet model
+  pretrain_network_g: experiments/ESRNet_finetune_newdeg/models/net_g_421000.pth
+  # pretrain_network_d: ~
+
+  param_key_g: params_ema
+  strict_load_g: true
+
+  param_key_d: params_ema
+  strict_load_d: true
+
+  # Fresh start - no resume state
+
+# training settings
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 1e-4  # Proven stable LR, aligned with previous successful training
+    weight_decay: 0
+    betas: [0.0, 0.99]  # Beta1=0 is common with spectral norm
+
+  optim_d:
+    type: Adam
+    lr: !!float 3e-5  # Middle ground: fast enough for meaningful gradients, slow enough to prevent domination
+    weight_decay: 0
+    betas: [0.0, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [421000]  # Fine-tuning phase after 100 epochs
+    gamma: 0.5
+
+  total_iter: 842000  # 200 epochs (4210 * 200)
+  warmup_iter: -1  # no warm up
+
+  # Discriminator training iterations
+  # RaHinge is stable - can use 1:1 ratio
+  net_d_iters: 1
+  net_d_init_iters: 0  # No D pretraining - standard for stable Hinge Loss
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+  # VGG19 perceptual loss - minimal weight, GAN leads training
+  perceptual_opt:
+    type: PerceptualLoss
+    layer_weights:
+      # before relu (pre-activation features)
+      'conv1_2': 0.1
+      'conv2_2': 0.1
+      'conv3_4': 1.0
+      'conv4_4': 1.0
+      'conv5_4': 1.0
+    vgg_type: vgg19
+    use_input_norm: true
+    perceptual_weight: !!float 0.005  # Artifact prevention, supports texture quality
+    style_weight: 0  # No style loss
+    range_norm: false
+    criterion: l1
+
+  # Relativistic Average Hinge Loss - drives texture and detail quality
+  gan_opt:
+    type: HingeLoss
+    relativistic: true
+    loss_weight: !!float 0.05  # Strong enough for clarity/detail improvement, balanced by lr_d=3e-5
+    # Produces noticeable quality gains without instability
+
+# Validation settings
+val:
+  val_freq: 4210  # Every epoch (200 epochs total)
+  save_img: False
+
+  metrics:
+    lpips:
+      type: calculate_lpips
+      crop_border: 4
+      better: lower  # Lower LPIPS = better perceptual similarity
+    niqe:
+      type: calculate_niqe
+      crop_border: 0
+      better: lower  # Lower NIQE = better natural image quality
+
+# logging settings
+logger:
+  print_freq: 100
+  save_checkpoint_freq: 4210  # Every epoch
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500
