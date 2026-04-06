@@ -290,7 +290,12 @@ class RealESRGANModel(SRGANModel):
                 grid_shifted[:, 1::2, :, 0] += shift_norm  # shift x coordinate of odd rows
 
                 # Apply the shifted sampling
-                out_combed = F.grid_sample(out, grid_shifted, mode='bilinear', padding_mode='border', align_corners=False)
+                out_combed = F.grid_sample(
+                    out,
+                    grid_shifted,
+                    mode='bilinear',
+                    padding_mode='border',
+                    align_corners=False)
 
                 # Optional: blend with vertically adjacent lines to simulate field blending artifacts
                 if combing_blend > 0 and h > 2:
@@ -306,7 +311,8 @@ class RealESRGANModel(SRGANModel):
                         # below neighbors: 2, 4, ..., end_idx
                         out_blended[:, :, 1:end_idx:2, :] = (
                             (1 - combing_blend) * out_combed[:, :, 1:end_idx:2, :] +
-                            combing_blend * 0.5 * (out_combed[:, :, 0:end_idx-1:2, :] + out_combed[:, :, 2:end_idx+1:2, :])
+                            combing_blend * 0.5 *
+                            (out_combed[:, :, 0:end_idx - 1:2, :] + out_combed[:, :, 2:end_idx + 1:2, :])
                         )
                     out = out_blended
                 else:
@@ -455,9 +461,10 @@ class RealESRGANModel(SRGANModel):
             fake_g_pred = self.net_d(self.output)
 
             # Check if using relativistic loss (RaGAN, RaHinge) or hinge loss
-            is_relativistic = (hasattr(self.cri_gan, '__class__') and
-                             ('Relativistic' in self.cri_gan.__class__.__name__ or
-                              'Hinge' in self.cri_gan.__class__.__name__))
+            is_relativistic = (
+                hasattr(self.cri_gan, '__class__') and
+                ('Relativistic' in self.cri_gan.__class__.__name__ or 'Hinge' in self.cri_gan.__class__.__name__)
+            )
             is_hinge = hasattr(self.cri_gan, '__class__') and 'Hinge' in self.cri_gan.__class__.__name__
 
             if is_relativistic or is_hinge:
@@ -485,9 +492,10 @@ class RealESRGANModel(SRGANModel):
         fake_d_pred = self.net_d(self.output.detach().clone())
 
         # Check if using relativistic loss (RaGAN, RaHinge) or hinge loss
-        is_relativistic = (hasattr(self.cri_gan, '__class__') and
-                         ('Relativistic' in self.cri_gan.__class__.__name__ or
-                          'Hinge' in self.cri_gan.__class__.__name__))
+        is_relativistic = (
+            hasattr(self.cri_gan, '__class__') and
+            ('Relativistic' in self.cri_gan.__class__.__name__ or 'Hinge' in self.cri_gan.__class__.__name__)
+        )
         is_hinge = hasattr(self.cri_gan, '__class__') and 'Hinge' in self.cri_gan.__class__.__name__
 
         if is_relativistic or is_hinge:
