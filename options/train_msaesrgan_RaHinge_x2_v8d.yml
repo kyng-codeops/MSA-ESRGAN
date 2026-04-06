@@ -183,16 +183,20 @@ network_d:
 # path
 path:
   # NOTE: 2x pretrained ESRNet model with same degradation pipeline as this GAN
-  pretrain_network_g: experiments/realesrnet_x2_ip14v33/models/net_g_65000.pth
-  # pretrain_network_d: ~
+  # pretrain_network_g: experiments/realesrnet_x2_ip14v33/models/net_g_65000.pth
 
+  # Resuming from best checkpoint at iter 845910
+  pretrain_network_g: experiments/MSA-ESRGAN-RaHinge_x2_ip14v33-v8d/models/net_g_845910.pth
+  pretrain_network_d: experiments/MSA-ESRGAN-RaHinge_x2_ip14v33-v8d/models/net_d_845910.pth
+
+  # NOTE: On resume (or --auto_resume), BasicSR auto-converts params_ema → params
   param_key_g: params_ema
   strict_load_g: true
 
   param_key_d: params_ema
   strict_load_d: true
 
-  resume_state: ~  # Fresh training - no resume state
+  resume_state: experiments/MSA-ESRGAN-RaHinge_x2_ip14v33-v8d/training_states/845910.state.updated
 
 # training settings
 train:
@@ -218,7 +222,13 @@ train:
 
   scheduler:
     type: MultiStepLR
-    milestones: [175500, 351000, 438750]  # Halve LR at 100, 200 & 250 epochs to finish
+    # Halve LR at 100, 200, 250 epochs
+    # Steady learning metrics after 3 LR cuts, no more cuts unless dynamics warrant.
+    # model removed high-freq feature halucinations iter 596k to 779k
+    # model removed more high-freq feature halucinations iter 779k to 845k
+    # Discriminator saturation: d_gap trending down more spikes <1 touched 0.3
+    # Cut LR at 845911 due to discrim saturation restart from 845910
+    milestones: [175500, 351000, 438750, 845911]
     gamma: 0.5
 
   total_iter: 1404000  # 800 epochs × 1755 iters/epoch
