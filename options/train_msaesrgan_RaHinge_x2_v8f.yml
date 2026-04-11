@@ -1,12 +1,12 @@
 # general settings
-name: MSA-ESRGAN-RaHinge_x2_ip14v33-v8e
+name: MSA-ESRGAN-RaHinge_x2_ip14v33-v8f
 model_type: RealESRGANModel
 scale: 2
 num_gpu: auto  # auto: can infer from your visible devices automatically. official: 4 GPUs
 manual_seed: 0
 
 # ==============================================================================
-# TRAINING HISTORY: v8 → v8a → v8b → v8c → v8d
+# TRAINING HISTORY: v8 → v8a → v8b → v8c → v8d → v8e → v8f
 # ==============================================================================
 #
 # v8 (baseline): LR_g=1e-4, LR_d=1e-4 (1:1), DP=20% of L1, GAN=50% of L1
@@ -37,23 +37,22 @@ manual_seed: 0
 #
 # v8d: LR_g=1e-4, LR_d=2.5e-5 (4:1), DP=50% of L1, GAN=30% of L1
 #   - Higher D learning rate (4:1 vs 5:1) to help D stay competent
-#   - Trained to 849k iterations with good results
+#   - Trained to 1074k iterations with good results
 #   - Issue: Hallucinating streaks/rays in background blur regions
 #
-# v8e (THIS CONFIG): Same as v8d + FILTERED DATASET + UNSPLASH + TRANSCODE DEG
-#   - Removed 10 images (0.05%) with motion blur artifacts in background:
-#     * nyc-documentary-025: motion blur bug/bird flash (5 images)
-#     * CGI-starwars-03: low-value blurry stars only (5 images)
-#   - Root cause: GAN learns motion blur "flash" pattern from GT, then
-#     incorrectly applies it to similar soft bright regions in inference
-#   - nightlighting RESTORED: static bokeh doesn't match hallucination pattern
-#   - ADDED: unsplash-4k-photos dataset (184 images + multiscale variants)
-#     * High-quality 4K photos with diverse real-world subjects
-#   - ADDED: Video transcoding degradation (transcode_prob: 0.10)
-#     * Simulates RGB→YUV→RGB color bleed from chroma subsampling (4:2:0, 4:2:2)
-#     * Common artifact in re-encoded video where color bleeds at sharp edges
-#   - Uses meta_info_ip14v33_nostreak_unsplash.txt (expanded dataset)
-#   - Fresh start from v8d iter 845910 checkpoint
+# v8e: Same as v8d + FILTERED DATASET + UNSPLASH + TRANSCODE DEG
+#   - Removed 10 images with motion blur artifacts
+#   - Added unsplash-4k-photos dataset (184 images)
+#   - Added video transcoding degradation (transcode_prob: 0.10)
+#   - Fresh start from v8d iter 1074060 checkpoint with full LR
+#
+# v8f (THIS CONFIG): Refined LR for mature model continuation
+#   - LR_g=5e-5 (half of v8d start) - model already at 1M+ iters
+#   - LR_d=1.25e-5 (maintaining 4:1 ratio)
+#   - Single milestone at 100 epochs (183k) for manual decision:
+#     * Cut LR again if D healthy, OR
+#     * Increase net_d_iters if D weakening
+#   - Same dataset as v8e (filtered + unsplash + transcode deg)
 #
 # ==============================================================================
 # DISCOVERED: PERCEPTUAL-GAN CROSS-TALK EFFECTS
@@ -222,7 +221,7 @@ train:
   ema_decay: 0.999
   optim_g:
     type: Adam
-    lr: !!float 1e-4  # Same as v8/v8a/v8b
+    lr: !!float 5e-5  # Half of v8d start - mature model from 1M+ iters
     weight_decay: 0
     betas: [0.9, 0.99]
 
@@ -235,15 +234,16 @@ train:
     #   v8b (DP 45%): d_gap=2.50, pos_fake=51.4%
     #   v8c (DP 50%): d_gap=2.28, pos_fake=48.1%
     # v8d: 2.5e-5 (4:1 ratio) - help D keep up with better G outputs from high DP
-    lr: !!float 2.5e-5
+    # v8f: 1.25e-5 (half of v8d, maintaining 4:1 ratio)
+    lr: !!float 1.25e-5
     weight_decay: 0
     betas: [0.0, 0.99]
 
   scheduler:
     type: MultiStepLR
-    # Halve LR at 200, 500 epochs (1830 iters/epoch with unsplash dataset)
-    # Manual monitoring after 500 epochs
-    milestones: [366000, 915000]
+    # Single milestone at 100 epochs (183k iters) - decision point:
+    # Either cut LR (gamma 0.5) or increase net_d_iters if D weakens
+    milestones: [183000]
     gamma: 0.5
 
   total_iter: 1830000  # 1000 epochs × 1830 iters/epoch
@@ -285,8 +285,9 @@ train:
     reduction: mean
 
   # VGG19 perceptual loss
-  # v8b: 0.043 → 44% of L1
-  # v8c: 0.049 → 50% of L1 (increased for better blur region guidance)
+  # v8c/v8d/v8e: 0.049 → target 50% but ran 102.5% on new dataset
+  # v8f: 0.031 → target 65% (scaled from v8e: 0.049 × 65/102.5)
+  #      Ratio 1.3:1 (DP:GAN) - more GAN for clarity without over-sharpening
   perceptual_opt:
     type: PerceptualLoss
     layer_weights:
@@ -298,20 +299,20 @@ train:
       'conv5_4': 0.5
     vgg_type: vgg19
     use_input_norm: true
-    perceptual_weight: !!float 0.049  # Target ~50% of L1 contribution
+    perceptual_weight: !!float 0.031  # Target ~65% of L1 contribution
     style_weight: 0  # No style loss
     range_norm: false
     criterion: l1
 
   # InceptionV3 perceptual loss
-  # v8c: 0.049 → 50% of L1 (balanced with VGG19 via dynamic balancer)
+  # v8f: 0.031 → target 65% (scaled from v8e: 0.049 × 65/102.5)
   inception_opt:
     type: InceptionPerceptualLoss
     layer_weights:
       mixed_5d: 1.0  # Early features (~35x35 resolution)
       mixed_6e: 1.0  # Mid-level features (~17x17 resolution)
       mixed_7c: 1.0  # High-level features (~8x8 resolution)
-    perceptual_weight: !!float 0.049  # Target ~50% of L1 contribution
+    perceptual_weight: !!float 0.031  # Target ~65% of L1 contribution
     criterion: l1
 
   # DYNAMIC LOSS BALANCER - Automatically balances VGG19 and Inception contributions

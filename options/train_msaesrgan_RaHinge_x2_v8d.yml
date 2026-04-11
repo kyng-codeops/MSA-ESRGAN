@@ -151,7 +151,7 @@ datasets:
     # data loader
     use_shuffle: true
     num_worker_per_gpu: 5
-    batch_size_per_gpu: 12
+    batch_size_per_gpu: 10    # 12 to 10 because OOM when net_d_iters=> 1 to 3
     dataset_enlarge_ratio: 1
     prefetch_mode: ~
 
@@ -238,7 +238,7 @@ train:
   max_grad_norm_d: 10.0
 
   # Discriminator training iterations
-  net_d_iters: 1
+  net_d_iters: 3       # increased from 1 to 3 @iter 1063530 epoch 606
   net_d_init_iters: 0  # No D pretraining - standard for stable Hinge Loss
 
   # ============================================================================

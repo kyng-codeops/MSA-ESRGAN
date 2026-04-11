@@ -50,6 +50,9 @@ def main(args):
         img = Image.open(path)
         width, height = img.size
 
+        # Strip ICC profile to avoid libpng warnings during training
+        img.info.pop('icc_profile', None)
+
         # Generate and queue scaled images
         for idx, scale in enumerate(scale_list):
             rlt = img.resize((int(width * scale), int(height * scale)), resample=Image.LANCZOS)
@@ -92,9 +95,44 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--input', type=str, default='datasets/DF2K/DF2K_HR', help='Input folder')
-    parser.add_argument('--output', type=str, default='datasets/DF2K/DF2K_multiscale', help='Output folder')
+    parser = argparse.ArgumentParser(
+        description='''Generate multi-scale image variants for training using double-buffered I/O.
+
+Creates 4 scaled versions of each input image:
+  - T0: 0.75x scale
+  - T1: 0.50x scale
+  - T2: 0.33x scale
+  - T3: shortest edge = 400px
+
+Output naming: {input_basename}T{0-3}.png
+
+Uses 24 writer threads with 96-item double buffers for fast disk I/O.''',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''Examples:
+  # Process a new 4K dataset
+  python scripts/generate_multiscale_DBUFF.py \\
+      --input datasets/ds_root/4K_action-movies \\
+      --output datasets/ds_root/4K_action-movies_multiscale
+
+  # Process unsplash PNG originals
+  python scripts/generate_multiscale_DBUFF.py \\
+      --input datasets/ds_root/unsplash-4k-photos_png \\
+      --output datasets/ds_root/unsplash-4k-photos_multiscale
+
+  # Process DIV2K
+  python scripts/generate_multiscale_DBUFF.py \\
+      --input datasets/ds_root/DIV2K_train_HR \\
+      --output datasets/ds_root/DIV2K_train_HR_multiscale
+
+Typical workflow:
+  1. Place HR images in datasets/ds_root/<dataset_name>/
+  2. Run this script with --output datasets/ds_root/<dataset_name>_multiscale
+  3. Run generate_meta_info.py to create metadata file for training
+''')
+    parser.add_argument('--input', type=str, required=True,
+                        help='Input folder containing HR images (e.g., datasets/ds_root/iphone14+4kv2)')
+    parser.add_argument('--output', type=str, required=True,
+                        help='Output folder for multiscale images (e.g., datasets/ds_root/iphone14+4kv2_multiscale)')
     args = parser.parse_args()
 
     main(args)

@@ -28,27 +28,65 @@ def main(args):
 
 
 if __name__ == '__main__':
-    """Generate meta info (txt file) for only Ground-Truth images.
+    parser = argparse.ArgumentParser(
+        description='''Generate meta_info.txt file listing all GT images for training.
 
-    It can also generate meta info from several folders into one txt file.
-    """
-    parser = argparse.ArgumentParser()
+Creates a text file with relative paths (one per line) for use in training configs.
+Can merge multiple input folders into a single metadata file.
+
+The number of --input and --root arguments must match. Each input folder's paths
+are computed relative to its corresponding root.''',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''Examples:
+  # Single folder (originals only)
+  python scripts/generate_meta_info.py \\
+      --input datasets/ds_root/iphone14+4kv2 \\
+      --root datasets/ds_root \\
+      --meta_info datasets/ds_root/meta_info/meta_info_iphone14.txt
+
+  # Combine originals + multiscale (typical usage)
+  python scripts/generate_meta_info.py \\
+      --input datasets/ds_root/iphone14+4kv2 datasets/ds_root/iphone14+4kv2_multiscale \\
+      --root datasets/ds_root datasets/ds_root \\
+      --meta_info datasets/ds_root/meta_info/meta_info_iphone14_multiscale.txt
+
+  # Multiple datasets combined
+  python scripts/generate_meta_info.py \\
+      --input datasets/ds_root/DIV2K_train_HR datasets/ds_root/DIV2K_train_HR_multiscale \\
+             datasets/ds_root/4K_action-movies datasets/ds_root/4K_action-movies_multiscale \\
+      --root datasets/ds_root datasets/ds_root datasets/ds_root datasets/ds_root \\
+      --meta_info datasets/ds_root/meta_info/meta_info_combined.txt
+
+  # With image validation (slower, checks for corrupted images)
+  python scripts/generate_meta_info.py \\
+      --input datasets/ds_root/unsplash-4k-photos_png \\
+      --root datasets/ds_root \\
+      --meta_info datasets/ds_root/meta_info/meta_info_unsplash.txt \\
+      --check
+
+Output format (one image path per line, relative to root):
+  iphone14+4kv2/IMG_0001.png
+  iphone14+4kv2/IMG_0002.png
+  iphone14+4kv2_multiscale/IMG_0001T0.png
+  ...
+''')
     parser.add_argument(
         '--input',
         nargs='+',
-        default=['datasets/DF2K/DF2K_HR', 'datasets/DF2K/DF2K_multiscale'],
-        help='Input folder, can be a list')
+        required=True,
+        help='Input folder(s) containing images (can specify multiple)')
     parser.add_argument(
         '--root',
         nargs='+',
-        default=['datasets/DF2K', 'datasets/DF2K'],
-        help='Folder root, should have the length as input folders')
+        required=True,
+        help='Root folder(s) for computing relative paths (must match --input count)')
     parser.add_argument(
         '--meta_info',
         type=str,
-        default='datasets/DF2K/meta_info/meta_info_DF2Kmultiscale.txt',
-        help='txt path for meta info')
-    parser.add_argument('--check', action='store_true', help='Read image to check whether it is ok')
+        required=True,
+        help='Output path for meta_info.txt file')
+    parser.add_argument('--check', action='store_true',
+                        help='Validate each image is readable (slower but catches corrupt files)')
     args = parser.parse_args()
 
     assert len(args.input) == len(args.root), ('Input folder and folder root should have the same length, but got '

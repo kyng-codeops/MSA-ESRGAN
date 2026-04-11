@@ -221,6 +221,73 @@ class RealESRNetModel(SRModel):
                 else:
                     out = out_combed
 
+            # ----------------------- Video transcoding degradation (optional) ----------------------- #
+            # Simulates color bleed from video transcoding: RGB → YUV (with chroma subsampling) → RGB
+            # Common in video re-encoding where chroma is subsampled (4:2:0 or 4:2:2) causing color fringing
+            transcode_prob = self.opt.get('transcode_prob', 0)
+            if transcode_prob > 0 and np.random.uniform() < transcode_prob:
+                transcode_subsample = self.opt.get('transcode_subsample', ['420', '422'])
+                transcode_upsample_mode = self.opt.get('transcode_upsample_mode', 'bilinear')
+
+                # Choose random subsampling mode
+                subsample_mode = random.choice(transcode_subsample)
+
+                b, c, h, w = out.size()
+
+                # RGB to YCbCr conversion matrix (BT.601 standard, common in older video)
+                # Y  =  0.299*R + 0.587*G + 0.114*B
+                # Cb = -0.169*R - 0.331*G + 0.500*B + 0.5
+                # Cr =  0.500*R - 0.419*G - 0.081*B + 0.5
+                rgb_to_ycbcr = torch.tensor([
+                    [0.299, 0.587, 0.114],
+                    [-0.169, -0.331, 0.500],
+                    [0.500, -0.419, -0.081]
+                ], dtype=out.dtype, device=out.device)
+
+                # YCbCr to RGB conversion matrix
+                ycbcr_to_rgb = torch.tensor([
+                    [1.0, 0.0, 1.402],
+                    [1.0, -0.344, -0.714],
+                    [1.0, 1.772, 0.0]
+                ], dtype=out.dtype, device=out.device)
+
+                # Convert to YCbCr
+                out_flat = out.permute(0, 2, 3, 1)  # (B, H, W, C)
+                ycbcr = torch.matmul(out_flat, rgb_to_ycbcr.T)
+                ycbcr[:, :, :, 1:] += 0.5  # offset Cb, Cr
+                ycbcr = ycbcr.permute(0, 3, 1, 2)  # (B, C, H, W)
+
+                # Separate Y and chroma
+                y_channel = ycbcr[:, 0:1, :, :]
+                chroma = ycbcr[:, 1:3, :, :]
+
+                # Subsample chroma based on mode
+                if subsample_mode == '420':
+                    # 4:2:0: half resolution in both H and W
+                    down_h, down_w = h // 2, w // 2
+                elif subsample_mode == '422':
+                    # 4:2:2: half resolution in W only
+                    down_h, down_w = h, w // 2
+                else:
+                    down_h, down_w = h // 2, w // 2
+
+                if down_h > 2 and down_w > 2:
+                    # Downsample chroma (simulates encoder)
+                    chroma_down = F.interpolate(chroma, size=(down_h, down_w), mode='area')
+
+                    # Upsample chroma back (simulates decoder with cheap interpolation)
+                    chroma_up = F.interpolate(chroma_down, size=(h, w), mode=transcode_upsample_mode)
+
+                    # Reconstruct YCbCr with degraded chroma
+                    ycbcr_degraded = torch.cat([y_channel, chroma_up], dim=1)
+
+                    # Convert back to RGB
+                    ycbcr_degraded[:, 1:3, :, :] -= 0.5  # remove Cb, Cr offset
+                    ycbcr_flat = ycbcr_degraded.permute(0, 2, 3, 1)  # (B, H, W, C)
+                    out = torch.matmul(ycbcr_flat, ycbcr_to_rgb.T)
+                    out = out.permute(0, 3, 1, 2)  # (B, C, H, W)
+                    out = torch.clamp(out, 0, 1)
+
             # JPEG compression + the final sinc filter
             # We also need to resize images to desired sizes. We group [resize back + sinc filter] together
             # as one operation.
