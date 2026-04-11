@@ -38,6 +38,10 @@ Configs specify extensive degradation pipeline parameters in YAML (e.g., `train_
 - **Two-stage degradation**: Each stage applies blur + noise + JPEG compression
 - **Fake upscale degradation** (`fake_upscale_prob`): Simulates SD-to-HD cheap interpolation
 - **Combing artifacts** (`combing_prob`): Interlacing simulation (disabled in v6/v7 for stability)
+- **Video transcoding** (`transcode_prob`): Simulates RGB→YUV→RGB color bleed from chroma subsampling
+  - Models 4:2:0 and 4:2:2 subsampling modes common in video codecs
+  - Causes color fringing/bleeding at sharp edges (characteristic of re-encoded video)
+  - Parameters: `transcode_subsample` (list of modes), `transcode_upsample_mode` (bilinear/bicubic)
 - **Noise ranges**: Wide ranges (1-40) accommodate both modern sensors and older devices
 - **JPEG ranges**: [15, 95] for heavy compression to high quality
 
@@ -168,34 +172,48 @@ A subtle form of training degradation can occur where the discriminator becomes 
 - Next validation at 155,770: LPIPS: 0.0106 (worse), NIQE: 6.8163 (worse)
 - By iter 160,000: LPIPS: 0.0116, NIQE: 6.9303 (continued degradation)
 
-**Root Cause - Discriminator Saturation:**
-- Discriminator outputs drifting toward extreme values (large positive/negative)
-- Loss becomes numerically stable (Hinge Loss plateaus) so no spike appears in `l_d_gan`
-- Discriminator provides weak/misleading gradients to generator
-- Generator continues training with poor adversarial signal → quality degrades
-- This is **more insidious than gradient explosion** because logs look "fine"
+**Root Cause - Discriminator Weakness (G/D Imbalance):**
 
-**How to Detect:**
+This is distinct from **true saturation** (outputs at extreme values like ±10+ causing vanishing gradients). Here, the discriminator becomes **too weak relative to the generator**:
+- Generator improves faster than discriminator can adapt
+- D outputs similar scores for real/fake (d_gap → 0), meaning D can't distinguish them
+- Loss remains numerically stable (Hinge Loss plateaus) so no spike appears in `l_d_gan`
+- D provides weak/misleading gradients — G trains without useful adversarial signal
+- Quality degrades even though logs look "fine"
+
+**Two Distinct Failure Modes:**
+| Issue | d_gap | out_d values | Cause | Fix |
+|-------|-------|--------------|-------|-----|
+| **Weakness** | → 0 | Similar for real/fake | G outpacing D | Increase `net_d_iters`, raise D LR |
+| **True Saturation** | Variable | Extreme (±10+) | Gradient vanishing | Reduce D LR, add spectral norm |
+
+**How to Detect Weakness:**
 1. **Watch `out_d_real` and `out_d_fake`** in logs (not just loss values):
-   - Healthy: Both negative or slightly positive, with clear gap (e.g., -0.8 vs -1.4)
-   - Warning: Both climb toward +1 or higher (discriminator becoming overconfident)
-   - Danger: Values approaching each other (discriminator confused)
+   - Healthy: Clear gap between them (e.g., -0.8 vs -1.4)
+   - Warning: Gap shrinking over iterations
+   - Danger: Values nearly equal (d_gap < 0.15) — D can't distinguish
 2. **Monitor validation metrics trend**:
-   - If LPIPS stops improving or reverses after previously decreasing → discriminator issue
+   - If LPIPS stops improving or reverses after previously decreasing → D weakness
    - Compare visual quality in `visualization/` folder before/after suspected iteration
 3. **Check `d_gap` metric**: `d_gap = |out_d_real - out_d_fake|`
    - Healthy: 0.3-0.7 (clear discrimination with room to improve)
    - Too high (>1.2): Discriminator too strong, generator struggles
-   - Too low (<0.15): Discriminator confused, generator getting misleading gradients
+   - Too low (<0.15): Discriminator too weak, generator getting poor gradients
 
-**Recovery Strategies:**
-1. **Revert to checkpoint before saturation** (e.g., load iter 151,560 in this case)
-2. **Reduce discriminator learning rate** by 2-5x (e.g., 1e-5 → 5e-6 or lower)
-3. **Increase queue_size** to provide more diversity to discriminator
-4. **Consider reducing `num_feat` in discriminator** if repeatedly overshooting (128→64)
-5. **Add discriminator dropout** (0.1-0.2) to prevent overconfident predictions
+**Recovery Strategies for Weakness:**
+1. **Revert to checkpoint before collapse** (e.g., load iter 151,560 in this case)
+2. **Increase `net_d_iters`** (1 → 2): Train D multiple times per G update
+3. **Increase discriminator learning rate** (if D is underpowered)
+4. **Increase queue_size** to provide more diversity to discriminator
+5. **Consider increasing `num_feat` in discriminator** if D is structurally too weak
 
-**Lesson**: Monitor **discriminator output values**, not just loss magnitudes. Hinge Loss can hide saturation issues.
+**Recovery Strategies for True Saturation:**
+1. **Reduce discriminator learning rate** by 2-5x (e.g., 1e-5 → 5e-6)
+2. **Add spectral normalization** if not present
+3. **Add discriminator dropout** (0.1-0.2) to prevent overconfident predictions
+4. **Reduce `num_feat` in discriminator** if repeatedly overshooting
+
+**Lesson**: Monitor **d_gap and output values**, not just loss magnitudes. Distinguish between D being too weak (d_gap → 0) vs outputs saturating (extreme values).
 
 ### Model Checkpoints
 - Generator: `experiments/<name>/models/net_g_<iter>.pth`
