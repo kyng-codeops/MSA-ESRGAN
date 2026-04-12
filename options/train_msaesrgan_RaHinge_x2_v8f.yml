@@ -170,7 +170,7 @@ datasets:
     # data loader
     use_shuffle: true
     num_worker_per_gpu: 5
-    batch_size_per_gpu: 12
+    batch_size_per_gpu: 10
     dataset_enlarge_ratio: 1
     prefetch_mode: ~
 
@@ -253,7 +253,8 @@ train:
   max_grad_norm_d: 10.0
 
   # Discriminator training iterations
-  net_d_iters: 1
+  net_d_iters: 2  # from 1 to 2 @ iter 192k (epoch 105)
+
   net_d_init_iters: 0  # No D pretraining - standard for stable Hinge Loss
 
   # ============================================================================
@@ -342,8 +343,19 @@ train:
     loss_weight: !!float 0.065  # Corrected from 0.058 (naive) with 1.12x factor
 
 # Validation settings
+# iterations per epoch changed from 1830 to 2196
+# when changing net_d_iters from 1 to 2 which required
+# batch_size_per_gpu reduction from 12 to 10 to fit in GPU memory
+# where queue_size 240 must be divisable by batch_size_per_gpu
+# Generator diversity is reduced (12 to 10) but discriminator diversity is
+# actually increased (240 is the discriminator queue size) thus
+# 240 / 12 = 20 iters/epoch, 240 / 10 = 24 iters/epoch
+# If net_d_iters 2 isn't enough, instead of 3 try altering gen/discrm diversity
+# balance drop batch to 8 (reduced gen diversity) increase queue 320-400
+# (400/8=50 iters/epoch) to give D more diverse samples per epoch without OOM
 val:
-  val_freq: 5490  # Every 3 epoch
+  # val_freq: 5490  # Every 3 epoch
+  val_freq: 6588  # Every 3 epoch
   save_img: False
 
   metrics:
@@ -359,7 +371,8 @@ val:
 # logging settings
 logger:
   print_freq: 100
-  save_checkpoint_freq: 5490  # Every 3 epochs
+  # save_checkpoint_freq: 5490  # Every 3 epochs
+  save_checkpoint_freq: 6588  # Every 3 epochs
   use_tb_logger: true
   wandb:
     project: ~
